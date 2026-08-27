@@ -11,20 +11,20 @@ export async function GET() {
       profile = await prisma.businessProfile.create({
         data: {
           companyName: 'Opal Chauffeurs',
-          tradingName: 'Esteem Travel Service Pty Ltd',
+          tradingName: 'Opal Chauffeurs',
           website: 'https://www.opalchauffeurs.com.au/',
           description:
-            'Opal Chauffeurs (Esteem Travel Service Pty Ltd) is a premier private chauffeur transportation service based in Melbourne, Australia.',
-          phone: '+61 400 000 000',
-          email: 'bookings@opalchauffeurs.com.au',
-          address: '18 Crawford Road',
-          suburb: 'Clarinda',
+            'Opal Chauffeurs is a premier private chauffeur transportation service based in Melbourne, Australia.',
+          phone: '+61 432 000 718',
+          email: 'book@opalchauffeurs.com.au',
+          address: '',
+          suburb: 'Melbourne',
           state: 'VIC',
-          postcode: '3169',
+          postcode: '3000',
           country: 'Australia',
           brandPositioning:
             'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-          emailSignature: `Warm regards,\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/`,
+          emailSignature: `Warm regards,\n\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
           collaborationOffer:
             'Introducing Opal Chauffeurs as your corporate transport partner.',
         },

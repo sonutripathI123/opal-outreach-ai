@@ -110,7 +110,7 @@ export default function CompaniesPage() {
   };
 
   const handleDownloadRadarCsv = () => {
-    const headers = ['Company Name', 'Domain', 'Industry', 'Suburb', 'Melbourne Address', 'Target Roles', 'Chauffeur Relevance'];
+    const headers = ['Company', 'Website', 'Industry', 'City', 'Address', 'Title', 'Description'];
     const rows = radarTargets.map((t) => [
       `"${t.name}"`,
       `"${t.domain}"`,

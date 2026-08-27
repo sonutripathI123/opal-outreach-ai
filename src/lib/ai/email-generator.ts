@@ -1,7 +1,7 @@
 export interface EmailGenerationParams {
   businessProfile: {
     companyName: string;
-    tradingName: string;
+    tradingName?: string;
     website: string;
     description: string;
     brandPositioning: string;
@@ -40,7 +40,7 @@ export class EmailGenerator {
     personalizationReasoning: string;
     evidenceCited: string[];
   } {
-    const { businessProfile, recipient, context } = params;
+    const { recipient, context } = params;
     const isEvent = context.type === 'EVENT';
     const recipientFirstName = recipient.name.split(' ')[0] || recipient.name;
     const location = context.location || 'Melbourne';
@@ -79,7 +79,7 @@ I hope this week is treating you well.
 
 ${dynamicIntro}
 
-I am reaching out on behalf of ${businessProfile.companyName} (${businessProfile.tradingName}) to introduce our executive and corporate transportation services. We support corporate travel desks and event organizers with:
+I am reaching out on behalf of Opal Chauffeurs to introduce our executive and corporate transportation services. We support corporate travel desks and event organizers with:
 
 ${dynamicValuePoints}
 
@@ -87,9 +87,14 @@ We would welcome the opportunity to connect briefly to discuss how we can suppor
 
 Would you be open to a brief 5-minute conversation or reviewing our corporate service overview?
 
-${businessProfile.emailSignature}`;
+Warm regards,
 
-    const fixedContent = `${businessProfile.companyName} (${businessProfile.tradingName}) - ${businessProfile.brandPositioning}`;
+Corporate Partnerships Team
+Opal Chauffeurs
+Web: https://www.opalchauffeurs.com.au/
+Email: book@opalchauffeurs.com.au | Direct: +61 432 000 718`;
+
+    const fixedContent = `Opal Chauffeurs is a Melbourne-based premium chauffeur service providing flight-tracked airport transfers, corporate accounts, and executive travel across Melbourne with an immaculate fleet of executive sedans, luxury SUVs, and Mercedes V-Class people movers.`;
     const dynamicContent = dynamicIntro;
 
     return {

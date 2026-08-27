@@ -30,15 +30,15 @@ async function main() {
                 tradingName: 'Esteem Travel Service Pty Ltd',
                 website: 'https://www.opalchauffeurs.com.au/',
                 description: 'Opal Chauffeurs (Esteem Travel Service Pty Ltd) is a premier private chauffeur transportation service based in Melbourne, Australia. We deliver unparalleled corporate travel, flight-tracked airport transfers, VIP executive transit, hourly private driver services, and comprehensive event mobility solutions with our pristine luxury fleet.',
-                phone: '+61 400 000 000',
-                email: 'bookings@opalchauffeurs.com.au',
-                address: '18 Crawford Road',
-                suburb: 'Clarinda',
+                phone: '+61 432 000 718',
+                email: 'book@opalchauffeurs.com.au',
+                address: '',
+                suburb: 'Melbourne',
                 state: 'VIC',
-                postcode: '3169',
+                postcode: '3000',
                 country: 'Australia',
-                brandPositioning: 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability with first-class sedans, luxury SUVs, and executive people movers tailored for corporate partners, executive travellers, and prestigious events.',
-                emailSignature: `Warm regards,\n\nCorporate Partnerships Team\nOpal Chauffeurs (Esteem Travel Service Pty Ltd)\n18 Crawford Road, Clarinda VIC 3169\nWeb: https://www.opalchauffeurs.com.au/\nEmail: bookings@opalchauffeurs.com.au | Direct: +61 400 000 000`,
+                brandPositioning: 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
+                emailSignature: `Warm regards,\n\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
                 collaborationOffer: 'Introducing Opal Chauffeurs as your dedicated executive transportation and corporate travel partner. We provide seamless corporate account onboarding, priority flight-tracked airport transfers, executive client transit, and tailored corporate event coordination.',
                 customNotes: 'Fleet includes Executive Sedans (Mercedes E-Class, BMW 7-Series, Audi A8), Luxury SUVs (Audi Q7, Lexus RX), Mercedes V-Class People Movers, and Stretch Limousines.',
             },
@@ -288,7 +288,7 @@ async function main() {
             recipientEmail: 'sarah.jenkins@telstra.com',
             recipientRole: 'Head of Executive Operations & Corporate Travel',
             subject: 'Executive Chauffeur & Airport Transport Partnership for Telstra Enterprise Team',
-            fixedContent: 'Opal Chauffeurs (Esteem Travel Service Pty Ltd) is a Melbourne-based premium chauffeur service providing flight-tracked airport transfers, corporate accounts, and executive travel across Melbourne and major Australian capitals with an immaculate fleet of executive sedans, luxury SUVs, and Mercedes V-Class people movers.',
+            fixedContent: 'Opal Chauffeurs is a Melbourne-based premium chauffeur service providing flight-tracked airport transfers, corporate accounts, and executive travel across Melbourne and major Australian capitals with an immaculate fleet of executive sedans, luxury SUVs, and Mercedes V-Class people movers.',
             dynamicContent: 'With Telstra’s Melbourne headquarters on Exhibition Street and regular executive travel across interstate offices, having a dependable, 24/7 flight-tracked chauffeur partner ensures seamless arrival and departure for your leadership team and visiting enterprise clients.',
             fullBodyText: `Dear Sarah,
 
@@ -309,10 +309,9 @@ Would you be open to a brief 5-minute call or reviewing our corporate service ov
 Warm regards,
 
 Corporate Partnerships Team
-Opal Chauffeurs (Esteem Travel Service Pty Ltd)
-18 Crawford Road, Clarinda VIC 3169
+Opal Chauffeurs
 Web: https://www.opalchauffeurs.com.au/
-Email: bookings@opalchauffeurs.com.au | Direct: +61 400 000 000`,
+Email: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
             personalizationReasoning: 'Addressed to Head of Executive Operations; references Telstra Melbourne HQ location, interstate travel requirements, flight tracking at Tullamarine Airport, and multi-passenger people mover options for visiting delegates.',
             aiEvidenceCited: JSON.stringify(['Melbourne HQ at 242 Exhibition St', 'High volume executive interstate travel', 'Corporate travel desk responsibilities']),
             status: 'READY_FOR_REVIEW',
@@ -440,10 +439,9 @@ Could we coordinate a brief 5-minute conversation or share our corporate rate sc
 Warm regards,
 
 Corporate Partnerships Team
-Opal Chauffeurs (Esteem Travel Service Pty Ltd)
-18 Crawford Road, Clarinda VIC 3169
+Opal Chauffeurs
 Web: https://www.opalchauffeurs.com.au/
-Email: bookings@opalchauffeurs.com.au | Direct: +61 400 000 000`,
+Email: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
             personalizationReasoning: 'Focused on legal practice operational needs: partner confidentiality, court and airport transit, Collins Arch location, and corporate billing.',
             aiEvidenceCited: JSON.stringify(['Collins Arch office location', 'Legal partner travel intensity', 'Practice operations management role']),
             status: 'READY_FOR_REVIEW',
@@ -568,10 +566,9 @@ Would you be open to a brief conversation this week?
 Warm regards,
 
 Corporate Partnerships Team
-Opal Chauffeurs (Esteem Travel Service Pty Ltd)
-18 Crawford Road, Clarinda VIC 3169
+Opal Chauffeurs
 Web: https://www.opalchauffeurs.com.au/
-Email: bookings@opalchauffeurs.com.au | Direct: +61 400 000 000`,
+Email: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
             personalizationReasoning: 'Specifically references the MCEC South Wharf venue, 60+ keynote speakers, flight-tracked airport pickups, and Mercedes V-Class group dinner transfers for the energy conference.',
             aiEvidenceCited: JSON.stringify(['MCEC South Wharf venue', 'Keynote speaker flight arrivals', 'Head of event logistics role']),
             status: 'READY_FOR_REVIEW',
