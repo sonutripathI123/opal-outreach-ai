@@ -213,40 +213,40 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+          {/* Navigation Tabs (Mobile Scrollable) */}
+          <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab('email')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shrink-0 transition-all ${
                 activeTab === 'email'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
               <Mail className="w-3.5 h-3.5" />
-              <span>Personalized Email Draft</span>
+              <span>Email Draft</span>
             </button>
             <button
               onClick={() => setActiveTab('dossier')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shrink-0 transition-all ${
                 activeTab === 'dossier'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>AI Research & Why Relevant</span>
+              <span>AI Research & Relevance</span>
             </button>
             <button
               onClick={() => setActiveTab('evidence')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shrink-0 transition-all ${
                 activeTab === 'evidence'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Score Breakdown & Evidence Sources</span>
+              <span>Score & Evidence</span>
             </button>
           </div>
 
@@ -471,21 +471,21 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
           )}
 
           {/* Master Action Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-800">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
             <button
               onClick={() => setIsRejectOpen(true)}
-              className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-rose-950/40 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-rose-950/40 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
             >
               <XCircle className="w-4 h-4" />
               <span>Reject Outreach</span>
             </button>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
               {draft.status !== 'APPROVED' && draft.status !== 'SENT' && (
                 <button
                   onClick={handleApprove}
                   disabled={approving}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-950 flex items-center gap-2 transition-all disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-950 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>{approving ? 'Approving...' : 'Approve Draft'}</span>
@@ -495,7 +495,7 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
               <button
                 onClick={handleSend}
                 disabled={sending || draft.status === 'SENT'}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
                 <span>{draft.status === 'SENT' ? 'Already Dispatched' : sending ? 'Dispatching...' : 'Approve & Send Now'}</span>

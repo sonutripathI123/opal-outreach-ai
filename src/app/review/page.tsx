@@ -80,38 +80,38 @@ export default function ReviewPage() {
           </div>
         </div>
 
-        {/* Filter Controls */}
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
+        {/* Filter Controls (Mobile wrap) */}
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setStatusFilter('READY_FOR_REVIEW')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
                 statusFilter === 'READY_FOR_REVIEW'
                   ? 'bg-amber-500 text-slate-950 shadow-md font-bold'
                   : 'bg-slate-950 text-slate-400 hover:text-slate-200'
               }`}
             >
-              Pending Approval ({drafts.filter((d) => d.status === 'READY_FOR_REVIEW').length})
+              Pending ({drafts.filter((d) => d.status === 'READY_FOR_REVIEW').length})
             </button>
             <button
               onClick={() => setStatusFilter('APPROVED')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
                 statusFilter === 'APPROVED'
                   ? 'bg-emerald-500 text-slate-950 shadow-md font-bold'
                   : 'bg-slate-950 text-slate-400 hover:text-slate-200'
               }`}
             >
-              Approved (Ready to Dispatch)
+              Approved
             </button>
             <button
               onClick={() => setStatusFilter('ALL')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
                 statusFilter === 'ALL'
                   ? 'bg-slate-800 text-slate-200 shadow-md'
                   : 'bg-slate-950 text-slate-400 hover:text-slate-200'
               }`}
             >
-              All Records
+              All
             </button>
           </div>
 
@@ -119,11 +119,11 @@ export default function ReviewPage() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none"
+              className="w-full sm:w-auto px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none"
             >
               <option value="ALL">All Categories</option>
-              <option value="COMPANY">Corporate Companies Only</option>
-              <option value="EVENT">Event Opportunities Only</option>
+              <option value="COMPANY">Corporate Only</option>
+              <option value="EVENT">Events Only</option>
             </select>
           </div>
         </div>

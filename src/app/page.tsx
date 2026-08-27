@@ -91,12 +91,12 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Top KPI Metrics Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Top KPI Metrics Grid (Mobile 1 col, Tablet 2 cols, Desktop 4 cols) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
           {/* Card 1: Companies */}
           <Link
             href="/companies"
-            className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-amber-500/40 transition-all group"
+            className="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-amber-500/40 transition-all group"
           >
             <div className="flex items-center justify-between text-slate-400 mb-3">
               <span className="text-xs font-medium uppercase tracking-wider">Corporate Companies</span>

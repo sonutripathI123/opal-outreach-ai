@@ -20,17 +20,22 @@ import {
   LogOut,
   ChevronRight,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface SidebarProps {
   pendingReviewCount?: number;
   newReplyCount?: number;
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   pendingReviewCount = 3,
   newReplyCount = 1,
+  isMobileOpen = false,
+  onMobileClose,
 }) => {
   const pathname = usePathname();
 
@@ -91,33 +96,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  return (
-    <aside className="w-72 bg-slate-950/90 border-r border-slate-800/80 flex flex-col h-screen fixed left-0 top-0 z-30 select-none backdrop-blur-xl">
+  const handleNavClick = () => {
+    if (onMobileClose) {
+      onMobileClose();
+    }
+  };
+
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-slate-950/95 text-slate-100 select-none backdrop-blur-xl">
       {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800/80 flex items-center gap-3.5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-amber-800 p-[1px] shadow-lg shadow-amber-950/40">
-          <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center">
-            <Car className="w-5 h-5 text-amber-400" />
+      <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-600 to-amber-800 p-[1px] shadow-lg shadow-amber-950/40">
+            <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center">
+              <Car className="w-5 h-5 text-amber-400" />
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-bold tracking-tight text-white">OPAL OUTREACH</span>
-            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              AI
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-bold tracking-tight text-white">OPAL OUTREACH</span>
+              <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                AI
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400 font-medium truncate max-w-[150px]">
+              Opal Chauffeurs Intelligence
             </span>
           </div>
-          <span className="text-[11px] text-slate-400 font-medium truncate max-w-[170px]">
-            Opal Chauffeurs Intelligence
-          </span>
         </div>
+
+        {/* Mobile Close Button */}
+        {onMobileClose && (
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="lg:hidden p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation List */}
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
         {navSections.map((section, idx) => (
           <div key={idx} className="space-y-1">
-            <div className="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+            <div className="px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">
               {section.title}
             </div>
             {section.items.map((item) => {
@@ -127,8 +151,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={handleNavClick}
                   className={clsx(
-                    'flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group',
+                    'flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group',
                     isActive
                       ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30 shadow-sm shadow-amber-500/10'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60 border border-transparent'
@@ -164,10 +189,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Human-in-the-Loop Safe Guard Footer Banner */}
-      <div className="p-3 mx-3 mb-3 rounded-xl bg-slate-900/80 border border-slate-800/80 flex items-center gap-2.5">
+      <div className="p-3 mx-3 mb-2 rounded-xl bg-slate-900/80 border border-slate-800/80 flex items-center gap-2.5">
         <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
         <div className="text-[11px] text-slate-400 leading-tight">
-          <span className="font-semibold text-slate-200">Human Guard Active:</span> All initial emails require admin approval.
+          <span className="font-semibold text-slate-200">Human Guard Active:</span> Approvals required.
         </div>
       </div>
 
@@ -190,6 +215,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <LogOut className="w-4 h-4" />
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Fixed Sidebar */}
+      <aside className="hidden lg:flex w-72 border-r border-slate-800/80 flex-col h-screen fixed left-0 top-0 z-30">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer Backdrop & Sliding Sidebar */}
+      {isMobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={onMobileClose}
+          />
+          {/* Slide-out Panel */}
+          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10 border-r border-slate-800">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 };
