@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity-logger';
+import { EmailDispatcher } from '@/lib/email/dispatcher';
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -19,7 +20,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Email has already been sent' }, { status: 400 });
     }
 
-    // Create immutable SentEmail record
+    // 1. Dispatch real email via EmailDispatcher (Google Workspace SMTP / Fallback)
+    const dispatchResult = await EmailDispatcher.sendEmail({
+      to: draft.recipientEmail,
+      toName: draft.recipientName,
+      subject: draft.subject,
+      text: draft.fullBodyText,
+      replyTo: 'book@opalchauffeurs.com.au',
+    });
+
+    if (!dispatchResult.success) {
+      console.warn('Real SMTP dispatch warning:', dispatchResult.error);
+    }
+
+    // 2. Create immutable SentEmail record
     const sentEmail = await prisma.sentEmail.create({
       data: {
         draftId: draft.id,
@@ -30,11 +44,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         recipientName: draft.recipientName,
         subject: draft.subject,
         exactSentBody: draft.fullBodyText,
-        deliveryStatus: 'DELIVERED',
+        deliveryStatus: dispatchResult.success ? 'DELIVERED' : 'BOUNCED',
       },
     });
 
-    // Update Draft status
+    // 3. Update Draft status
     await prisma.emailDraft.update({
       where: { id: draft.id },
       data: {
@@ -43,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
     });
 
-    // Update Company status
+    // 4. Update Company status
     if (draft.companyId) {
       await prisma.company.update({
         where: { id: draft.companyId },
@@ -51,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
     }
 
-    // Update Event status
+    // 5. Update Event status
     if (draft.eventId) {
       await prisma.event.update({
         where: { id: draft.eventId },
@@ -59,10 +73,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
     }
 
-    // Setup Automated Follow-Up Sequence (Day 5, Day 10)
+    // 6. Setup Automated Follow-Up Sequence (Day 5, Day 10)
     const now = Date.now();
     const day5 = new Date(now + 1000 * 60 * 60 * 24 * 5);
     const day10 = new Date(now + 1000 * 60 * 60 * 24 * 10);
+    const recipientFirstName = draft.recipientName.split(' ')[0] || draft.recipientName;
+
+    const followUpSignature = `Warm regards,\n\n${recipientFirstName},\n\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`;
 
     await prisma.followUp.createMany({
       data: [
@@ -74,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           scheduledDate: day5,
           status: 'SCHEDULED',
           draftSubject: `Re: ${draft.subject}`,
-          draftBody: `Hi ${draft.recipientName.split(' ')[0]},\n\nFollowing up on my previous note regarding Opal Chauffeurs executive transport and flight-tracked airport transfers. Would you have 5 minutes this week for a brief introductory conversation?\n\nWarm regards,\nCorporate Partnerships Team | Opal Chauffeurs`,
+          draftBody: `Hi ${recipientFirstName},\n\nFollowing up on my previous note regarding Opal Chauffeurs executive transport and flight-tracked airport transfers. Would you have 5 minutes this week for a brief introductory conversation?\n\n${followUpSignature}`,
         },
         {
           sentEmailId: sentEmail.id,
@@ -83,29 +100,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           stepNumber: 2,
           scheduledDate: day10,
           status: 'SCHEDULED',
-          draftSubject: `Following up: Executive Chauffeur Services for ${draft.recipientName.split(' ')[0]}`,
-          draftBody: `Hi ${draft.recipientName.split(' ')[0]},\n\nJust checking in one last time to see if Opal Chauffeurs could support your upcoming corporate travel or VIP event logistics. Please let me know if we can share our corporate rate schedule.\n\nWarm regards,\nCorporate Partnerships Team | Opal Chauffeurs`,
+          draftSubject: `Following up: Executive Chauffeur Services for ${recipientFirstName}`,
+          draftBody: `Hi ${recipientFirstName},\n\nJust checking in one last time to see if Opal Chauffeurs could support your upcoming corporate travel or VIP event logistics. Please let me know if we can share our corporate rate schedule.\n\n${followUpSignature}`,
         },
       ],
     });
 
-    // Audit log
+    // 7. Audit log
     await logActivity({
       action: 'EMAIL_SENT',
       entityType: 'SENT_EMAIL',
       entityId: sentEmail.id,
       actor: 'ADMIN_USER',
-      description: `Initial personalized outreach email sent to ${draft.recipientName} (${draft.recipientEmail}). Follow-up cadence initiated.`,
+      description: `Initial personalized outreach email sent to ${draft.recipientName} (${draft.recipientEmail}) via ${dispatchResult.mode}. Follow-up cadence initiated.`,
       details: {
         recipientEmail: draft.recipientEmail,
         subject: draft.subject,
         sentEmailId: sentEmail.id,
+        mode: dispatchResult.mode,
+        messageId: dispatchResult.messageId,
       },
     });
 
-    return NextResponse.json({ success: true, sentEmail });
+    return NextResponse.json({ success: true, sentEmail, dispatchResult });
   } catch (error: any) {
     console.error('Error sending outreach:', error);
-    return NextResponse.json({ error: 'Failed to send outreach email' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to send outreach email' }, { status: 500 });
   }
 }

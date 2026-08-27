@@ -16,6 +16,8 @@ import {
   Users,
   ShieldCheck,
   RefreshCw,
+  Mail,
+  Send,
 } from 'lucide-react';
 
 interface ApolloKeyItem {
@@ -38,6 +40,17 @@ export default function SettingsPage() {
   // Testing state for Claude
   const [testingAi, setTestingAi] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; claudeResponse?: string } | null>(null);
+
+  // SMTP Configuration State
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState(465);
+  const [smtpUser, setSmtpUser] = useState('book@opalchauffeurs.com.au');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFromEmail, setSmtpFromEmail] = useState('book@opalchauffeurs.com.au');
+  const [smtpFromName, setSmtpFromName] = useState('Opal Chauffeurs Corporate Team');
+  const [testEmailRecipient, setTestEmailRecipient] = useState('sonutripathi9305@gmail.com');
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Apollo Key Pool State
   const [apolloPool, setApolloPool] = useState<ApolloKeyItem[]>([]);
@@ -96,6 +109,19 @@ export default function SettingsPage() {
             const parsed = JSON.parse(aiParams.value);
             if (parsed.modelPrimary) setModelPrimary(parsed.modelPrimary);
             if (parsed.modelFast) setModelFast(parsed.modelFast);
+          } catch (e) {}
+        }
+
+        const smtpSetting = settingsList.find((s: any) => s.key === 'smtp_config');
+        if (smtpSetting?.value) {
+          try {
+            const parsed = JSON.parse(smtpSetting.value);
+            if (parsed.host) setSmtpHost(parsed.host);
+            if (parsed.port) setSmtpPort(Number(parsed.port));
+            if (parsed.user) setSmtpUser(parsed.user);
+            if (parsed.pass) setSmtpPass(parsed.pass);
+            if (parsed.fromEmail) setSmtpFromEmail(parsed.fromEmail);
+            if (parsed.fromName) setSmtpFromName(parsed.fromName);
           } catch (e) {}
         }
 
@@ -176,6 +202,38 @@ export default function SettingsPage() {
       });
     } finally {
       setTestingAi(false);
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    setTestingEmail(true);
+    setTestEmailResult(null);
+    try {
+      const res = await fetch('/api/settings/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          host: smtpHost,
+          port: smtpPort,
+          user: smtpUser,
+          pass: smtpPass,
+          fromEmail: smtpFromEmail,
+          fromName: smtpFromName,
+          testRecipient: testEmailRecipient,
+        }),
+      });
+      const data = await res.json();
+      setTestEmailResult({
+        success: data.success,
+        message: data.message || data.error || 'Failed to send test email.',
+      });
+    } catch (err: any) {
+      setTestEmailResult({
+        success: false,
+        message: err.message || 'Error testing email delivery.',
+      });
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -286,6 +344,24 @@ export default function SettingsPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            key: 'smtp_config',
+            value: {
+              host: smtpHost.trim(),
+              port: Number(smtpPort),
+              secure: Number(smtpPort) === 465,
+              user: smtpUser.trim(),
+              pass: smtpPass.trim(),
+              fromEmail: smtpFromEmail.trim(),
+              fromName: smtpFromName.trim(),
+            },
+            category: 'EMAIL_CONFIG',
+            description: 'Outgoing SMTP Configuration',
+          }),
+        }),
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             key: 'ai_engine_parameters',
             value: {
               primaryProvider: 'claude',
@@ -337,11 +413,11 @@ export default function SettingsPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 text-slate-300 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>AI Governance & API Pooling</span>
+              <span>AI Governance, Apollo & Email Dispatch</span>
             </div>
-            <h1 className="text-2xl font-black text-white">AI Engine, Apollo.io Pool & Scoring Weights</h1>
+            <h1 className="text-xl sm:text-2xl font-black text-white">System Settings & Integrations</h1>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              Manage Anthropic Claude credentials, configure multi-account Apollo.io API keys with auto-failover (for 1,500–2,000+ monthly email extractions), and adjust transparent 0–100 scoring weights.
+              Configure Anthropic Claude, Apollo.io key rotation, official Google Workspace SMTP email delivery (<code className="text-amber-300">book@opalchauffeurs.com.au</code>), and scoring models.
             </p>
           </div>
 
@@ -351,14 +427,14 @@ export default function SettingsPage() {
             className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
-            <span>{saving ? 'Saving...' : 'Save AI & Scoring Rules'}</span>
+            <span>{saving ? 'Saving...' : 'Save All Settings'}</span>
           </button>
         </div>
 
         {savedSuccess && (
           <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Settings and API keys updated successfully!</span>
+            <span>Settings and API configurations saved successfully!</span>
           </div>
         )}
 
@@ -368,7 +444,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2.5">
               <Cpu className="w-5 h-5 text-amber-400" />
               <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
-                Anthropic Claude API Abstraction
+                Anthropic Claude API Intelligence
               </h2>
             </div>
             <button
@@ -378,7 +454,7 @@ export default function SettingsPage() {
               className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
             >
               {testingAi ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              <span>{testingAi ? 'Testing Key...' : 'Test Claude Connection'}</span>
+              <span>{testingAi ? 'Testing...' : 'Test Claude API'}</span>
             </button>
           </div>
 
@@ -453,7 +529,127 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* SECTION 2: Apollo.io Multi-Account Key Pool & Auto-Failover */}
+        {/* SECTION 2: Outgoing Real Email Dispatch (Google Workspace SMTP / book@opalchauffeurs.com.au) */}
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <Mail className="w-5 h-5 text-emerald-400" />
+                <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+                  Official Outgoing Email Dispatch (Google Workspace / SMTP)
+                </h2>
+                <Badge variant="emerald" size="sm">
+                  book@opalchauffeurs.com.au
+                </Badge>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                All approved emails will be dispatched through your verified business account with real inbox delivery tracking.
+              </p>
+            </div>
+          </div>
+
+          {/* Test Status Banner */}
+          {testEmailResult && (
+            <div
+              className={`p-4 rounded-2xl text-xs font-semibold flex items-center gap-2.5 ${
+                testEmailResult.success
+                  ? 'bg-emerald-950/50 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/50 border border-rose-500/40 text-rose-300'
+              }`}
+            >
+              {testEmailResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <div>{testEmailResult.message}</div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">SMTP Host</label>
+              <input
+                type="text"
+                value={smtpHost}
+                onChange={(e) => setSmtpHost(e.target.value)}
+                placeholder="smtp.gmail.com"
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Port (465 SSL / 587 TLS)</label>
+              <input
+                type="number"
+                value={smtpPort}
+                onChange={(e) => setSmtpPort(Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Sender Email</label>
+              <input
+                type="email"
+                value={smtpFromEmail}
+                onChange={(e) => setSmtpFromEmail(e.target.value)}
+                placeholder="book@opalchauffeurs.com.au"
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">SMTP Username / Login Email</label>
+              <input
+                type="text"
+                value={smtpUser}
+                onChange={(e) => setSmtpUser(e.target.value)}
+                placeholder="book@opalchauffeurs.com.au"
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Google App Password / SMTP Password</label>
+              <input
+                type="password"
+                value={smtpPass}
+                onChange={(e) => setSmtpPass(e.target.value)}
+                placeholder="16-digit Google App Password (e.g. abcd efgh ijkl mnop)"
+                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+          </div>
+
+          {/* Test Live Send Box */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex-1">
+              <label className="block text-[11px] font-semibold text-slate-400 mb-1">Send Verification Test Email To:</label>
+              <input
+                type="email"
+                value={testEmailRecipient}
+                onChange={(e) => setTestEmailRecipient(e.target.value)}
+                placeholder="your-email@gmail.com"
+                className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-100"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestSmtp}
+              disabled={testingEmail}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md flex items-center justify-center gap-1.5 transition-all self-end sm:self-auto disabled:opacity-50"
+            >
+              {testingEmail ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              <span>{testingEmail ? 'Sending Test...' : 'Send Test Email'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* SECTION 3: Apollo.io Multi-Account Key Pool & Auto-Failover */}
         <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800">
             <div className="space-y-1">
@@ -467,7 +663,7 @@ export default function SettingsPage() {
                 </Badge>
               </div>
               <p className="text-[11px] text-slate-400">
-                Auto-switches between multiple accounts when monthly or daily credit limits are reached, achieving 1,500–2,000+ monthly verified executive emails effortlessly.
+                Auto-switches between multiple accounts when credit limits are reached, achieving 1,500–2,000+ monthly verified executive emails effortlessly.
               </p>
             </div>
 
@@ -627,7 +823,7 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* SECTION 3: 2-Column Scoring Factor Sliders */}
+        {/* SECTION 4: 2-Column Scoring Factor Sliders */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Corporate Scoring Factor Weights */}
           <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
