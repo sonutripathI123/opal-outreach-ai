@@ -308,6 +308,8 @@ Would you be open to a brief 5-minute call or reviewing our corporate service ov
 
 Warm regards,
 
+Sarah,
+
 Corporate Partnerships Team
 Opal Chauffeurs
 Web: https://www.opalchauffeurs.com.au/
@@ -438,6 +440,8 @@ Could we coordinate a brief 5-minute conversation or share our corporate rate sc
 
 Warm regards,
 
+Marcus,
+
 Corporate Partnerships Team
 Opal Chauffeurs
 Web: https://www.opalchauffeurs.com.au/
@@ -564,6 +568,8 @@ If your logistics team is currently finalizing speaker or VIP transportation arr
 Would you be open to a brief conversation this week?
 
 Warm regards,
+
+Elena,
 
 Corporate Partnerships Team
 Opal Chauffeurs

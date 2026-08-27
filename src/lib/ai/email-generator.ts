@@ -89,6 +89,8 @@ Would you be open to a brief 5-minute conversation or reviewing our corporate se
 
 Warm regards,
 
+${recipientFirstName},
+
 Corporate Partnerships Team
 Opal Chauffeurs
 Web: https://www.opalchauffeurs.com.au/
