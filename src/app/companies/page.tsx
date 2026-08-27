@@ -20,6 +20,9 @@ import {
   ShieldCheck,
   UploadCloud,
   FileSpreadsheet,
+  Radar,
+  Copy,
+  Download,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -31,8 +34,13 @@ export default function CompaniesPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [isRadarOpen, setIsRadarOpen] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+
+  // Target Radar State
+  const [radarTargets, setRadarTargets] = useState<any[]>([]);
+  const [copiedDomains, setCopiedDomains] = useState(false);
 
   // CSV Import State
   const [csvText, setCsvText] = useState('');
@@ -77,9 +85,50 @@ export default function CompaniesPage() {
     }
   };
 
+  const fetchRadarTargets = async () => {
+    try {
+      const res = await fetch('/api/companies/target-radar');
+      if (res.ok) {
+        const data = await res.json();
+        setRadarTargets(data.companies || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     fetchCompanies();
+    fetchRadarTargets();
   }, [search, priorityFilter, statusFilter]);
+
+  const handleCopyDomains = () => {
+    const domains = radarTargets.map((t) => t.domain).join('\n');
+    navigator.clipboard.writeText(domains);
+    setCopiedDomains(true);
+    setTimeout(() => setCopiedDomains(false), 3000);
+  };
+
+  const handleDownloadRadarCsv = () => {
+    const headers = ['Company Name', 'Domain', 'Industry', 'Suburb', 'Melbourne Address', 'Target Roles', 'Chauffeur Relevance'];
+    const rows = radarTargets.map((t) => [
+      `"${t.name}"`,
+      `"${t.domain}"`,
+      `"${t.industry}"`,
+      `"${t.suburb}"`,
+      `"${t.address}"`,
+      `"${t.targetRoles.join('; ')}"`,
+      `"${t.whyTarget}"`,
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', 'Melbourne_Top_Corporate_Targets_Apollo.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +176,6 @@ export default function CompaniesPage() {
     const rows = [];
 
     for (let i = 1; i < lines.length; i++) {
-      // Split respecting simple commas
       const values = lines[i].split(',').map((v) => v.replace(/^["']|["']$/g, '').trim());
       const row: any = {};
       headers.forEach((h, idx) => {
@@ -202,19 +250,27 @@ export default function CompaniesPage() {
         {/* Header Title & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
               <Building2 className="w-6 h-6 text-amber-400" />
               <span>Corporate Company Intelligence</span>
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              AI-discovered medium & enterprise organizations scored for executive travel, airport transfers, and client transport in Melbourne.
+              Discover target enterprises in Melbourne, generate Apollo search queries, and import verified contacts to create AI pitches.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 self-start sm:self-auto">
+            <button
+              onClick={() => setIsRadarOpen(true)}
+              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold shadow-md flex items-center gap-2 transition-all"
+            >
+              <Radar className="w-4 h-4 text-amber-400 animate-spin" style={{ animationDuration: '6s' }} />
+              <span>🎯 Melbourne Target Radar</span>
+            </button>
+
             <button
               onClick={() => setIsCsvModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 text-xs font-bold shadow-md flex items-center gap-2 transition-all"
+              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 text-xs font-bold shadow-md flex items-center gap-2 transition-all"
             >
               <FileSpreadsheet className="w-4 h-4 text-sky-400" />
               <span>📥 Import Apollo CSV</span>
@@ -222,18 +278,18 @@ export default function CompaniesPage() {
 
             <button
               onClick={() => setIsAddOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all"
+              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>Discover / Add Company</span>
+              <span>Add Custom</span>
             </button>
           </div>
         </div>
 
         {/* Filter & Search Bar */}
-        <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 sm:gap-4">
           {/* Search */}
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
             <input
               type="text"
@@ -245,25 +301,25 @@ export default function CompaniesPage() {
           </div>
 
           {/* Filters */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50"
+              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 flex-1 sm:flex-none"
             >
               <option value="ALL">All Priorities</option>
               <option value="HIGH">High Priority (80+)</option>
               <option value="MEDIUM">Medium Priority (60-79)</option>
-              <option value="MANUAL_REVIEW">Manual Review (40-59)</option>
+              <option value="MANUAL_REVIEW">Manual Review</option>
             </select>
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50"
+              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 flex-1 sm:flex-none"
             >
               <option value="ALL">All Statuses</option>
-              <option value="DRAFTED">Drafted / In Review</option>
+              <option value="DRAFTED">In Review</option>
               <option value="APPROVED">Approved</option>
               <option value="CONTACTED">Contacted</option>
               <option value="REPLIED">Replied</option>
@@ -284,10 +340,10 @@ export default function CompaniesPage() {
               return (
                 <div
                   key={comp.id}
-                  className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-amber-500/40 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-5 group"
+                  className="p-4 sm:p-5 rounded-2xl bg-slate-900/80 border border-slate-800/80 hover:border-amber-500/40 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-5 group"
                 >
                   {/* Left: Info & Score */}
-                  <div className="flex items-start sm:items-center gap-4 flex-1">
+                  <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-1">
                     <ScoreGauge score={comp.opportunityScore} size="md" />
 
                     <div className="space-y-1 flex-1">
@@ -306,7 +362,7 @@ export default function CompaniesPage() {
                         </Badge>
                       </div>
 
-                      <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
+                      <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 sm:gap-3">
                         <span>{comp.industry}</span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
@@ -342,9 +398,9 @@ export default function CompaniesPage() {
                   </div>
 
                   {/* Right: Contact & Actions */}
-                  <div className="flex flex-wrap items-center gap-4 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-800">
+                  <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-800 w-full lg:w-auto">
                     {contact && (
-                      <div className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs min-w-[170px]">
+                      <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs flex-1 sm:flex-none min-w-[150px]">
                         <div className="text-[10px] text-slate-500 uppercase font-semibold">Contact</div>
                         <div className="font-semibold text-slate-200 line-clamp-1">{contact.fullName}</div>
                         <div className="text-[11px] text-slate-400 line-clamp-1">{contact.jobTitle}</div>
@@ -354,15 +410,15 @@ export default function CompaniesPage() {
                     <div className="flex items-center gap-2">
                       <Link
                         href={`/companies/${comp.id}`}
-                        className="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-semibold transition-colors"
+                        className="px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-semibold transition-colors"
                       >
-                        View Dossier
+                        Dossier
                       </Link>
 
                       {draft && (
                         <button
                           onClick={() => openReviewForCompany(comp)}
-                          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+                          className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
                           <span>Review Draft</span>
@@ -376,10 +432,107 @@ export default function CompaniesPage() {
           </div>
         ) : (
           <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 text-xs">
-            No companies matching current filters. Click &ldquo;Discover / Add Company&rdquo; or &ldquo;Import Apollo CSV&rdquo; to evaluate organizations.
+            No companies matching current filters. Click &ldquo;🎯 Melbourne Target Radar&rdquo; or &ldquo;Import Apollo CSV&rdquo; to evaluate organizations.
           </div>
         )}
       </div>
+
+      {/* Target Radar Modal */}
+      <Modal
+        isOpen={isRadarOpen}
+        onClose={() => setIsRadarOpen(false)}
+        title="🎯 Melbourne Corporate Target Radar & Apollo Workflow"
+        subtitle="Curated directory of top Melbourne high-mobility corporate enterprises with 1-click Apollo search links and bulk domain exports."
+        maxWidth="5xl"
+      >
+        <div className="space-y-5">
+          {/* Action Ribbon */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>3-Step Automated Apollo Outreach Process</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                1. Copy domains below → 2. Paste in Apollo web & export CSV → 3. Drop CSV into &ldquo;Import Apollo CSV&rdquo; to generate AI drafts!
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyDomains}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md flex items-center gap-1.5 transition-all"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>{copiedDomains ? '✓ Copied Domains!' : 'Copy 25+ Domains'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadRadarCsv}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-400" />
+                <span>Download Targets CSV</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Target List Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[60vh] overflow-y-auto pr-1">
+            {radarTargets.map((item, idx) => {
+              const apolloUrl = `https://app.apollo.io/#/people?qOrganizationDomains=${encodeURIComponent(item.domain)}&personTitles[]=Executive%20Assistant&personTitles[]=Head%20of%20Operations&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Office%20Manager`;
+
+              return (
+                <div
+                  key={idx}
+                  className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 hover:border-amber-500/40 transition-all flex flex-col justify-between space-y-3"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-100">{item.name}</h4>
+                        <div className="text-[11px] text-amber-400 font-mono">{item.domain}</div>
+                      </div>
+                      <Badge variant="gold" size="sm">
+                        {item.suburb}
+                      </Badge>
+                    </div>
+
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                      <span className="truncate">{item.address}</span>
+                    </div>
+
+                    <p className="text-xs text-slate-300 font-medium line-clamp-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                      {item.whyTarget}
+                    </p>
+
+                    <div className="text-[10px] text-slate-400">
+                      <span className="font-semibold text-slate-300">Target Roles: </span>
+                      {item.targetRoles.join(', ')}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-900 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500">{item.size}</span>
+                    <a
+                      href={apolloUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-xs font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <span>Find on Apollo.io</span>
+                      <ExternalLink className="w-3 h-3 text-sky-400" />
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Modal>
 
       {/* CSV Bulk Import Modal */}
       <Modal
@@ -469,10 +622,10 @@ export default function CompaniesPage() {
               </div>
 
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                <div className="font-semibold text-slate-300">💡 How this works:</div>
-                <div>1. The office team exports 50–500 leads from Apollo.io into 1 CSV file.</div>
-                <div>2. Drop it here and click &ldquo;Run Bulk AI Intelligence&rdquo;.</div>
-                <div>3. Claude AI writes 100% individual emails for all of them and sends them to your Review Queue!</div>
+                <div className="font-semibold text-slate-300">💡 Complete 3-Step Flow:</div>
+                <div>1. Click &ldquo;🎯 Melbourne Target Radar&rdquo; and click &ldquo;Copy Domains&rdquo;.</div>
+                <div>2. In Apollo.io web, paste domains and click &ldquo;Export CSV&rdquo;.</div>
+                <div>3. Drop that CSV file here. Claude AI will score all companies and draft emails automatically!</div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
