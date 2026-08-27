@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "render-build": "prisma db push --accept-data-loss && node prisma/seed.js && next build",
+    "render-build": "npx prisma db push --accept-data-loss && node prisma/seed.js && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "share": "node scripts/share.js",
@@ -22,26 +22,23 @@
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",
-    "bcryptjs": "^2.4.3",
-    "clsx": "^2.1.1",
-    "jsonwebtoken": "^9.0.2",
-    "lucide-react": "^0.453.0",
-    "next": "14.2.15",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.4"
-  },
-  "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
+    "bcryptjs": "^2.4.3",
+    "clsx": "^2.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.453.0",
+    "next": "14.2.15",
     "postcss": "^8.4.47",
     "prisma": "^5.21.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4",
     "tailwindcss": "^3.4.14",
-    "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
   }
 }
