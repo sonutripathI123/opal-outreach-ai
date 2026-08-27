@@ -18,6 +18,8 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
+  UploadCloud,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -28,8 +30,16 @@ export default function CompaniesPage() {
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+
+  // CSV Import State
+  const [csvText, setCsvText] = useState('');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvParsedCount, setCsvParsedCount] = useState<number | null>(null);
+  const [importingCsv, setImportingCsv] = useState(false);
+  const [csvImportResult, setCsvImportResult] = useState<any>(null);
 
   // New Company Form state
   const [formData, setFormData] = useState({
@@ -108,6 +118,76 @@ export default function CompaniesPage() {
     }
   };
 
+  // Helper to parse CSV string into objects
+  const parseCsvStringToObjects = (text: string) => {
+    const lines = text.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].split(',').map((h) => h.replace(/^["']|["']$/g, '').trim());
+    const rows = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      // Split respecting simple commas
+      const values = lines[i].split(',').map((v) => v.replace(/^["']|["']$/g, '').trim());
+      const row: any = {};
+      headers.forEach((h, idx) => {
+        row[h] = values[idx] || '';
+      });
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCsvFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        setCsvText(content);
+        const parsed = parseCsvStringToObjects(content);
+        setCsvParsedCount(parsed.length);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleCsvTextChange = (text: string) => {
+    setCsvText(text);
+    const parsed = parseCsvStringToObjects(text);
+    setCsvParsedCount(parsed.length > 0 ? parsed.length : null);
+  };
+
+  const handleRunBulkImport = async () => {
+    const rows = parseCsvStringToObjects(csvText);
+    if (rows.length === 0) {
+      alert('Please provide valid CSV content with headers');
+      return;
+    }
+
+    setImportingCsv(true);
+    setCsvImportResult(null);
+    try {
+      const res = await fetch('/api/companies/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCsvImportResult(data);
+        fetchCompanies();
+      } else {
+        alert(data.error || 'Failed to bulk import leads');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error executing bulk import');
+    } finally {
+      setImportingCsv(false);
+    }
+  };
+
   const openReviewForCompany = (comp: any) => {
     const draft = comp.emailDrafts?.[0];
     if (draft) {
@@ -131,13 +211,23 @@ export default function CompaniesPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setIsAddOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Discover / Add Company</span>
-          </button>
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <button
+              onClick={() => setIsCsvModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 text-xs font-bold shadow-md flex items-center gap-2 transition-all"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-sky-400" />
+              <span>📥 Import Apollo CSV</span>
+            </button>
+
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Discover / Add Company</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter & Search Bar */}
@@ -286,10 +376,131 @@ export default function CompaniesPage() {
           </div>
         ) : (
           <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 text-xs">
-            No companies matching current filters. Click "Discover / Add Company" to evaluate a new organization.
+            No companies matching current filters. Click &ldquo;Discover / Add Company&rdquo; or &ldquo;Import Apollo CSV&rdquo; to evaluate organizations.
           </div>
         )}
       </div>
+
+      {/* CSV Bulk Import Modal */}
+      <Modal
+        isOpen={isCsvModalOpen}
+        onClose={() => {
+          setIsCsvModalOpen(false);
+          setCsvImportResult(null);
+        }}
+        title="📥 Bulk Import Apollo.io Leads & Generate AI Outreaches"
+        subtitle="Upload an Apollo.io CSV export or paste CSV text. Claude 3.5 AI will automatically score all companies and generate tailored executive drafts in batch."
+        maxWidth="2xl"
+      >
+        <div className="space-y-4">
+          {csvImportResult ? (
+            <div className="p-6 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-3">
+              <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+              <h3 className="text-base font-bold text-white">Bulk Import & Intelligence Complete!</h3>
+              <p className="text-xs text-emerald-200">
+                Successfully imported <b>{csvImportResult.importedCount}</b> companies and generated individual personalized outreach drafts.
+              </p>
+              {csvImportResult.skippedCount > 0 && (
+                <div className="text-[11px] text-slate-400">
+                  {csvImportResult.skippedCount} duplicate or invalid rows skipped.
+                </div>
+              )}
+              <div className="pt-2 flex justify-center gap-3">
+                <Link
+                  href="/review"
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-lg"
+                >
+                  Go to Human Review Queue →
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCsvImportResult(null);
+                    setCsvText('');
+                    setCsvParsedCount(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold"
+                >
+                  Import More
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* File Upload Zone */}
+              <div className="border-2 border-dashed border-slate-700 hover:border-sky-500/60 rounded-2xl p-6 text-center transition-colors bg-slate-950/60">
+                <input
+                  type="file"
+                  accept=".csv"
+                  id="csv-file-input"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <label htmlFor="csv-file-input" className="cursor-pointer space-y-2 block">
+                  <UploadCloud className="w-8 h-8 text-sky-400 mx-auto" />
+                  <div className="text-xs font-bold text-slate-200">
+                    {csvFile ? csvFile.name : 'Click to select or drag & drop an Apollo CSV file'}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Supports exports directly from Apollo.io with Company Name, Website, Title, Email columns.
+                  </div>
+                </label>
+              </div>
+
+              {/* Paste Text Area */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[11px] font-semibold text-slate-300">
+                    Or Paste CSV Raw Content Here:
+                  </label>
+                  {csvParsedCount !== null && (
+                    <span className="text-[11px] font-bold text-emerald-400">
+                      ✓ {csvParsedCount} leads detected
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  rows={4}
+                  value={csvText}
+                  onChange={(e) => handleCsvTextChange(e.target.value)}
+                  placeholder="Company Name,Website,Industry,First Name,Last Name,Title,Email&#10;Telstra,telstra.com,Telecommunications,Sarah,Jenkins,Head of Operations,sarah.jenkins@telstra.com&#10;BHP,bhp.com,Mining,Marcus,Vance,Corporate Travel Desk,m.vance@bhp.com"
+                  className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <div className="font-semibold text-slate-300">💡 How this works:</div>
+                <div>1. The office team exports 50–500 leads from Apollo.io into 1 CSV file.</div>
+                <div>2. Drop it here and click &ldquo;Run Bulk AI Intelligence&rdquo;.</div>
+                <div>3. Claude AI writes 100% individual emails for all of them and sends them to your Review Queue!</div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCsvModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={importingCsv || !csvParsedCount}
+                  onClick={handleRunBulkImport}
+                  className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-lg shadow-sky-600/20 flex items-center gap-2 disabled:opacity-50 transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>
+                    {importingCsv
+                      ? 'AI Processing & Scoring Leads...'
+                      : `Import & Score ${csvParsedCount ? `${csvParsedCount} Leads` : 'Leads'}`}
+                  </span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
 
       {/* Add / Discover Company Modal */}
       <Modal
@@ -395,7 +606,7 @@ export default function CompaniesPage() {
                   type="text"
                   value={formData.contactName}
                   onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-                  placeholder="Full Name"
+                  placeholder="Full Name (or leave blank for Apollo)"
                   className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-100 focus:outline-none"
                 />
               </div>
@@ -417,7 +628,7 @@ export default function CompaniesPage() {
                   type="email"
                   value={formData.contactEmail}
                   onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                  placeholder="travel@company.com"
+                  placeholder="Leave blank for auto-lookup"
                   className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-100 focus:outline-none"
                 />
               </div>
