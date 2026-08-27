@@ -5,17 +5,17 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "prisma generate && next build",
-    "render-build": "prisma generate && prisma db push && npx ts-node prisma/seed.ts && next build",
+    "render-build": "prisma generate && prisma db push && node prisma/seed.js && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "share": "node scripts/share.js",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:seed": "node --loader ts-node/esm prisma/seed.ts"
+    "prisma:seed": "node prisma/seed.js"
   },
   "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",
