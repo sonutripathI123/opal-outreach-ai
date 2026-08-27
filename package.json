@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "prisma generate && next build",
-    "render-build": "prisma generate && prisma db push && node prisma/seed.js && next build",
+    "build": "next build",
+    "render-build": "prisma db push --accept-data-loss && node prisma/seed.js && next build",
     "start": "next start",
     "postinstall": "prisma generate",
     "share": "node scripts/share.js",
@@ -13,6 +13,9 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "node prisma/seed.js"
+  },
+  "engines": {
+    "node": "20.x"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
