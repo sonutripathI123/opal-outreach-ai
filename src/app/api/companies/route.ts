@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { CorporateIntelligenceEngine } from '@/lib/ai/corporate';
 import { EmailGenerator } from '@/lib/ai/email-generator';
+import { ApolloPoolManager } from '@/lib/enrichment/apollo';
 import { logActivity, createNotification } from '@/lib/activity-logger';
 
 export const dynamic = 'force-dynamic';
@@ -171,24 +172,38 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create Contact (if provided or synthesized default role)
-    const finalContactName = contactName || 'Executive Operations Desk';
-    const finalContactRole = contactRole || 'Head of Executive Operations & Corporate Travel';
-    const finalContactEmail = contactEmail || `travel@${company.domain || 'company.com.au'}`;
+    // Check Apollo.io Multi-Key Pool for verified decision maker if not manually provided
+    let apolloContact = null;
+    if (!contactEmail) {
+      try {
+        apolloContact = await ApolloPoolManager.findDecisionMaker(company.domain || website, company.name);
+      } catch (e) {
+        console.warn('Apollo search error:', e);
+      }
+    }
+
+    const finalContactName = apolloContact?.fullName || contactName || 'Executive Operations Desk';
+    const finalContactRole = apolloContact?.jobTitle || contactRole || 'Head of Executive Operations & Corporate Travel';
+    const finalContactEmail = apolloContact?.email || contactEmail || `travel@${company.domain || 'company.com.au'}`;
+    const emailSource = apolloContact ? 'APOLLO_IO_VERIFIED' : contactEmail ? 'MANUAL_ENTRY' : 'SYNTHESIZED_ROLE';
+    const emailConfidence = apolloContact ? apolloContact.emailConfidence : contactEmail ? 0.95 : 0.8;
+    const verificationStatus = apolloContact ? apolloContact.verificationStatus : contactEmail ? 'VERIFIED' : 'LIKELY';
 
     const contact = await prisma.contact.create({
       data: {
         companyId: company.id,
         fullName: finalContactName,
-        firstName: finalContactName.split(' ')[0],
-        lastName: finalContactName.split(' ').slice(1).join(' '),
+        firstName: apolloContact?.firstName || finalContactName.split(' ')[0],
+        lastName: apolloContact?.lastName || finalContactName.split(' ').slice(1).join(' '),
         jobTitle: finalContactRole,
-        department: 'Corporate Travel / Operations',
+        department: apolloContact?.department || 'Corporate Travel / Operations',
         seniorityLevel: 'DIRECTOR',
         email: finalContactEmail,
-        emailSource: contactEmail ? 'MANUAL_ENTRY' : 'SYNTHESIZED_ROLE',
-        emailConfidence: contactEmail ? 0.95 : 0.8,
-        verificationStatus: contactEmail ? 'VERIFIED' : 'LIKELY',
+        emailSource,
+        emailConfidence,
+        verificationStatus,
+        linkedinUrl: apolloContact?.linkedinUrl,
+        phone: apolloContact?.phone,
         isPrimaryContact: true,
       },
     });
