@@ -15,8 +15,12 @@ import {
   Users,
   Sparkles,
   ExternalLink,
+  Radar,
+  RotateCw,
+  CheckCircle2,
+  Building,
+  Layers,
   ArrowRight,
-  ShieldCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -28,6 +32,15 @@ export default function EventsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+
+  // Location Radar State
+  const [isRadarOpen, setIsRadarOpen] = useState(false);
+  const [radarLocation, setRadarLocation] = useState('South Wharf (MCEC)');
+  const [radarScanning, setRadarScanning] = useState(false);
+  const [discoveredEvents, setDiscoveredEvents] = useState<any[]>([]);
+  const [importingId, setImportingId] = useState<string | null>(null);
+  const [batchImporting, setBatchImporting] = useState(false);
+  const [radarSuccessMsg, setRadarSuccessMsg] = useState<string | null>(null);
 
   // New Event Form State
   const [formData, setFormData] = useState({
@@ -70,6 +83,101 @@ export default function EventsPage() {
   useEffect(() => {
     fetchEvents();
   }, [search, eventTypeFilter]);
+
+  // Handle Location Radar Scan
+  const handleScanLocation = async (locationQuery: string) => {
+    setRadarScanning(true);
+    setRadarSuccessMsg(null);
+    try {
+      const res = await fetch('/api/events/scan-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationQuery }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDiscoveredEvents(data.events || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRadarScanning(false);
+    }
+  };
+
+  const openRadarModal = () => {
+    setIsRadarOpen(true);
+    handleScanLocation(radarLocation);
+  };
+
+  // Import single discovered event
+  const handleImportDiscoveredEvent = async (eventItem: any) => {
+    setImportingId(eventItem.id);
+    try {
+      const res = await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: eventItem.name,
+          eventType: eventItem.eventType,
+          startDate: eventItem.startDate,
+          endDate: eventItem.endDate,
+          venueName: eventItem.venueName,
+          venueAddress: eventItem.venueAddress,
+          suburb: eventItem.suburb,
+          city: eventItem.city,
+          state: eventItem.state,
+          expectedAttendance: eventItem.expectedAttendance,
+          vipPresenceLikelihood: eventItem.vipPresenceLikelihood,
+          organizerName: eventItem.organizerName,
+          organizerCompany: eventItem.organizerCompany,
+          organizerWebsite: eventItem.organizerWebsite,
+          organizerEmail: eventItem.organizerEmail,
+          sourceUrl: eventItem.sourceUrl,
+        }),
+      });
+
+      if (res.ok) {
+        setDiscoveredEvents((prev) =>
+          prev.map((e) => (e.id === eventItem.id ? { ...e, isAlreadyImported: true } : e))
+        );
+        setRadarSuccessMsg(`"${eventItem.name}" imported and Claude AI pitch generated in Review Queue!`);
+        fetchEvents();
+        setTimeout(() => setRadarSuccessMsg(null), 4000);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setImportingId(null);
+    }
+  };
+
+  // Import All discovered events
+  const handleBatchImportDiscovered = async () => {
+    const unimported = discoveredEvents.filter((e) => !e.isAlreadyImported);
+    if (unimported.length === 0) return;
+
+    setBatchImporting(true);
+    try {
+      const res = await fetch('/api/events/batch-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: unimported }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setDiscoveredEvents((prev) => prev.map((e) => ({ ...e, isAlreadyImported: true })));
+        setRadarSuccessMsg(`Successfully imported ${data.importedCount} events and drafted AI proposals!`);
+        fetchEvents();
+        setTimeout(() => setRadarSuccessMsg(null), 4000);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setBatchImporting(false);
+    }
+  };
 
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +227,16 @@ export default function EventsPage() {
     }
   };
 
+  const locationPresets = [
+    { label: '🏢 South Wharf (MCEC)', query: 'South Wharf' },
+    { label: '🎰 Southbank (Crown)', query: 'Southbank' },
+    { label: '🏛️ Melbourne CBD', query: 'Melbourne CBD' },
+    { label: '🏟️ Docklands (Marvel)', query: 'Docklands' },
+    { label: '🎾 Olympic Blvd (Melb Park)', query: 'Olympic Boulevard' },
+    { label: '🏛️ Carlton (Royal Exhibition)', query: 'Carlton' },
+    { label: '🌆 Sydney (ICC)', query: 'Sydney' },
+  ];
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -134,13 +252,24 @@ export default function EventsPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setIsAddOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Discover / Monitor Event</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Primary Feature: Location Radar Button */}
+            <button
+              onClick={openRadarModal}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 via-sky-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-sky-500/25 flex items-center gap-2 transition-all"
+            >
+              <Radar className="w-4 h-4 text-sky-200 animate-pulse" />
+              <span>📡 Location Event Radar</span>
+            </button>
+
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-2 transition-all"
+            >
+              <Plus className="w-4 h-4 text-amber-400" />
+              <span>Add Custom Event</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter & Search Bar */}
@@ -151,7 +280,7 @@ export default function EventsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search upcoming events, venues (MCEC, Crown, Melbourne Park)..."
+              placeholder="Search monitored events, venues (MCEC, Crown, Marvel Stadium)..."
               className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500/50"
             />
           </div>
@@ -267,13 +396,210 @@ export default function EventsPage() {
             })}
           </div>
         ) : (
-          <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 text-xs">
-            No upcoming events matching current filters. Click "Discover / Monitor Event" to track an event.
+          <div className="p-12 text-center rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 text-xs space-y-3">
+            <div>No events found matching current filters.</div>
+            <button
+              onClick={openRadarModal}
+              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold inline-flex items-center gap-2"
+            >
+              <Radar className="w-3.5 h-3.5" />
+              <span>Scan Any Suburb / Venue with Radar</span>
+            </button>
           </div>
         )}
       </div>
 
-      {/* Add Event Modal */}
+      {/* MODAL 1: 📡 LOCATION EVENT RADAR & AI SCANNER */}
+      <Modal
+        isOpen={isRadarOpen}
+        onClose={() => setIsRadarOpen(false)}
+        title="📡 Location Event Radar & AI Scanner"
+        subtitle="Enter any Suburb, Venue, or Australian City to scan & discover all upcoming high-value corporate events with instant chauffeur pitch generation."
+        maxWidth="4xl"
+      >
+        <div className="space-y-5">
+          {/* Preset Location Chips */}
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 mb-2">Quick Suburb & Venue Presets:</div>
+            <div className="flex flex-wrap gap-1.5">
+              {locationPresets.map((preset) => (
+                <button
+                  key={preset.query}
+                  type="button"
+                  onClick={() => {
+                    setRadarLocation(preset.query);
+                    handleScanLocation(preset.query);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    radarLocation === preset.query
+                      ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                      : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Search Input Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+            <div className="relative flex-1">
+              <MapPin className="w-4 h-4 text-sky-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                value={radarLocation}
+                onChange={(e) => setRadarLocation(e.target.value)}
+                placeholder="Enter any Suburb or Venue (e.g. South Wharf, Crown, Docklands, Sydney, Brisbane)..."
+                onKeyDown={(e) => e.key === 'Enter' && handleScanLocation(radarLocation)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleScanLocation(radarLocation)}
+              disabled={radarScanning || !radarLocation.trim()}
+              className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shadow-lg shadow-sky-600/30 flex items-center justify-center gap-2 disabled:opacity-50 transition-all shrink-0"
+            >
+              {radarScanning ? <RotateCw className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+              <span>{radarScanning ? 'Scanning Location...' : 'Scan Location'}</span>
+            </button>
+          </div>
+
+          {/* Feedback Success Message */}
+          {radarSuccessMsg && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{radarSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Discovered Events List */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <span>Discovered Events ({discoveredEvents.length})</span>
+                <span className="text-[11px] font-normal text-slate-500">for &ldquo;{radarLocation}&rdquo;</span>
+              </div>
+
+              {discoveredEvents.some((e) => !e.isAlreadyImported) && (
+                <button
+                  type="button"
+                  onClick={handleBatchImportDiscovered}
+                  disabled={batchImporting}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold shadow flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {batchImporting ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  <span>Import All Unsaved to Review Queue</span>
+                </button>
+              )}
+            </div>
+
+            {radarScanning ? (
+              <div className="p-10 text-center rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                <RotateCw className="w-6 h-6 text-sky-400 animate-spin mx-auto" />
+                <div className="text-xs font-semibold text-slate-300">Scanning {radarLocation} venue calendars & delegate rosters...</div>
+                <div className="text-[11px] text-slate-500">Extracting international summits, keynote attendance, and airport logistics.</div>
+              </div>
+            ) : discoveredEvents.length > 0 ? (
+              <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                {discoveredEvents.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-2xl bg-slate-950 border border-slate-800/90 hover:border-slate-700 transition-all space-y-2.5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-white">{item.name}</span>
+                          <Badge variant="sky" size="sm">
+                            {item.eventType.replace(/_/g, ' ')}
+                          </Badge>
+                          {item.isAlreadyImported && (
+                            <Badge variant="emerald" size="sm">
+                              ✓ IN DATABASE
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2.5">
+                          <span className="text-amber-400 font-medium">{item.startDate}</span>
+                          <span>•</span>
+                          <span>{item.venueName} ({item.suburb})</span>
+                          <span>•</span>
+                          <span>~{item.expectedAttendance?.toLocaleString()} Delegates</span>
+                          <span>•</span>
+                          <span className="font-mono text-slate-300">{item.ticketPriceRange}</span>
+                        </div>
+                      </div>
+
+                      {/* Import / Action Button */}
+                      <div>
+                        {item.isAlreadyImported ? (
+                          <span className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Monitored</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleImportDiscoveredEvent(item)}
+                            disabled={importingId === item.id}
+                            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow flex items-center gap-1.5 transition-all disabled:opacity-50 shrink-0"
+                          >
+                            {importingId === item.id ? (
+                              <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="w-3.5 h-3.5" />
+                            )}
+                            <span>{importingId === item.id ? 'Importing...' : 'Import & Draft AI Pitch'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Logistics Demand Explanation */}
+                    <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800/80 text-[11px] text-slate-300 leading-relaxed">
+                      <b className="text-sky-400">Transport Logistics Opportunity: </b>
+                      {item.whyRelevant}
+                    </div>
+
+                    {/* Organizer Info & Services */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400">
+                      <div>
+                        Host: <b className="text-slate-200">{item.organizerCompany}</b> ({item.organizerName}) • <span className="text-sky-400 font-mono">{item.organizerEmail}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {item.recommendedServices?.map((srv: string, i: number) => (
+                          <span key={i} className="px-2 py-0.5 rounded-md bg-slate-900 text-slate-300 text-[10px] border border-slate-800">
+                            {srv}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center rounded-2xl bg-slate-950 border border-dashed border-slate-800 text-xs text-slate-400">
+                No events found for &ldquo;{radarLocation}&rdquo;. Try another suburb or venue name above.
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsRadarOpen(false)}
+              className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+            >
+              Close Radar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL 2: Add Event Form */}
       <Modal
         isOpen={isAddOpen}
         onClose={() => setIsAddOpen(false)}
