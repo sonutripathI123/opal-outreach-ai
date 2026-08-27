@@ -1,3 +1,5 @@
+import { prisma } from '@/lib/prisma';
+
 export interface AICompletionRequest {
   systemPrompt: string;
   userPrompt: string;
@@ -14,10 +16,24 @@ export interface AICompletionResponse {
 }
 
 export class AIClient {
-  private static async getApiKey(): Promise<string | null> {
-    if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your-anthropic-claude-api-key-here') {
-      return process.env.ANTHROPIC_API_KEY;
+  static async getApiKey(): Promise<string | null> {
+    try {
+      // 1. Check database setting
+      const dbKey = await prisma.systemSettings.findUnique({
+        where: { key: 'anthropic_api_key' },
+      });
+      if (dbKey?.value && dbKey.value.trim() !== '' && !dbKey.value.includes('••••')) {
+        return dbKey.value.trim();
+      }
+    } catch (e) {
+      // Fallback
     }
+
+    // 2. Check process.env
+    if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your-anthropic-claude-api-key-here' && !process.env.ANTHROPIC_API_KEY.includes('••••')) {
+      return process.env.ANTHROPIC_API_KEY.trim();
+    }
+
     return null;
   }
 
@@ -55,6 +71,9 @@ export class AIClient {
               outputTokens: data.usage?.output_tokens || 0,
             },
           };
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          console.warn('Anthropic API returned error status:', res.status, errData);
         }
       } catch (err) {
         console.warn('Claude API request failed, utilizing dynamic synthesized AI engine:', err);

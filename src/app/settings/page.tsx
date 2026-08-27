@@ -7,17 +7,20 @@ import {
   Sparkles,
   Save,
   CheckCircle2,
-  Sliders,
-  ShieldCheck,
+  AlertCircle,
   Cpu,
   Key,
+  RotateCw,
 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Testing state
+  const [testingAi, setTestingAi] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; claudeResponse?: string } | null>(null);
 
   // Corporate weights state
   const [corpWeights, setCorpWeights] = useState({
@@ -41,7 +44,7 @@ export default function SettingsPage() {
     timingUrgency: 5,
   });
 
-  const [apiKey, setApiKey] = useState('sk-ant-api03-••••••••••••••••••••••••');
+  const [apiKey, setApiKey] = useState('');
   const [modelPrimary, setModelPrimary] = useState('claude-3-5-sonnet-20241022');
   const [modelFast, setModelFast] = useState('claude-3-5-haiku-20241022');
 
@@ -50,34 +53,52 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings');
       if (res.ok) {
         const data = await res.json();
-        setSettings(data.settings || []);
+        const settingsList = data.settings || [];
 
-        const corp = data.settings?.find((s: any) => s.key === 'corporate_scoring_weights');
-        if (corp?.value) {
-          const parsed = JSON.parse(corp.value);
-          setCorpWeights({
-            companySize: parsed.companySize?.weight ?? 20,
-            locationRelevance: parsed.locationRelevance?.weight ?? 15,
-            travelDemand: parsed.travelDemand?.weight ?? 20,
-            executiveActivity: parsed.executiveActivity?.weight ?? 15,
-            eventsVipActivity: parsed.eventsVipActivity?.weight ?? 15,
-            serviceMatch: parsed.serviceMatch?.weight ?? 10,
-            businessVerification: parsed.businessVerification?.weight ?? 5,
-          });
+        const keySetting = settingsList.find((s: any) => s.key === 'anthropic_api_key');
+        if (keySetting?.value) {
+          setApiKey(keySetting.value);
         }
 
-        const ev = data.settings?.find((s: any) => s.key === 'event_scoring_weights');
+        const aiParams = settingsList.find((s: any) => s.key === 'ai_engine_parameters');
+        if (aiParams?.value) {
+          try {
+            const parsed = JSON.parse(aiParams.value);
+            if (parsed.modelPrimary) setModelPrimary(parsed.modelPrimary);
+            if (parsed.modelFast) setModelFast(parsed.modelFast);
+          } catch (e) {}
+        }
+
+        const corp = settingsList.find((s: any) => s.key === 'corporate_scoring_weights');
+        if (corp?.value) {
+          try {
+            const parsed = JSON.parse(corp.value);
+            setCorpWeights({
+              companySize: parsed.companySize?.weight ?? 20,
+              locationRelevance: parsed.locationRelevance?.weight ?? 15,
+              travelDemand: parsed.travelDemand?.weight ?? 20,
+              executiveActivity: parsed.executiveActivity?.weight ?? 15,
+              eventsVipActivity: parsed.eventsVipActivity?.weight ?? 15,
+              serviceMatch: parsed.serviceMatch?.weight ?? 10,
+              businessVerification: parsed.businessVerification?.weight ?? 5,
+            });
+          } catch (e) {}
+        }
+
+        const ev = settingsList.find((s: any) => s.key === 'event_scoring_weights');
         if (ev?.value) {
-          const parsed = JSON.parse(ev.value);
-          setEventWeights({
-            eventSize: parsed.eventSize?.weight ?? 20,
-            transportDemand: parsed.transportDemand?.weight ?? 25,
-            vipRelevance: parsed.vipRelevance?.weight ?? 15,
-            groupTransferPotential: parsed.groupTransferPotential?.weight ?? 15,
-            locationMatch: parsed.locationMatch?.weight ?? 10,
-            eventTypeMatch: parsed.eventTypeMatch?.weight ?? 10,
-            timingUrgency: parsed.timingUrgency?.weight ?? 5,
-          });
+          try {
+            const parsed = JSON.parse(ev.value);
+            setEventWeights({
+              eventSize: parsed.eventSize?.weight ?? 20,
+              transportDemand: parsed.transportDemand?.weight ?? 25,
+              vipRelevance: parsed.vipRelevance?.weight ?? 15,
+              groupTransferPotential: parsed.groupTransferPotential?.weight ?? 15,
+              locationMatch: parsed.locationMatch?.weight ?? 10,
+              eventTypeMatch: parsed.eventTypeMatch?.weight ?? 10,
+              timingUrgency: parsed.timingUrgency?.weight ?? 5,
+            });
+          } catch (e) {}
         }
       }
     } catch (e) {
@@ -91,12 +112,68 @@ export default function SettingsPage() {
     fetchSettings();
   }, []);
 
+  const handleTestConnection = async () => {
+    setTestingAi(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/settings/test-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey, model: modelPrimary }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: `Connected successfully to ${data.model}!`,
+          claudeResponse: data.claudeResponse,
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: data.error || 'Failed to connect to Claude API.',
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Error connecting to API endpoint.',
+      });
+    } finally {
+      setTestingAi(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setSavedSuccess(false);
     try {
       await Promise.all([
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'anthropic_api_key',
+            value: apiKey.trim(),
+            category: 'AI_CONFIG',
+            description: 'Anthropic Claude API Secret Key',
+          }),
+        }),
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'ai_engine_parameters',
+            value: {
+              primaryProvider: 'claude',
+              modelPrimary,
+              modelFast,
+              temperature: 0.3,
+            },
+            category: 'AI_CONFIG',
+          }),
+        }),
         fetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -140,7 +217,7 @@ export default function SettingsPage() {
             </div>
             <h1 className="text-2xl font-black text-white">AI Engine & 0–100 Scoring Weights</h1>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              Configure Anthropic Claude API parameters and dynamically adjust the transparent factor weights used by the Corporate and Event Opportunity scoring models.
+              Configure Anthropic Claude API credentials, test live connection, and dynamically adjust transparent factor weights used by the Corporate and Event scoring models.
             </p>
           </div>
 
@@ -157,7 +234,7 @@ export default function SettingsPage() {
         {savedSuccess && (
           <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Scoring factor weights updated successfully!</span>
+            <span>Settings and API keys updated successfully!</span>
           </div>
         )}
 
@@ -170,10 +247,41 @@ export default function SettingsPage() {
                 Anthropic Claude API Abstraction
               </h2>
             </div>
-            <Badge variant="emerald" size="sm">
-              Server-Side Protected
-            </Badge>
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={testingAi}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              {testingAi ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>{testingAi ? 'Testing Key...' : 'Test Claude Connection'}</span>
+            </button>
           </div>
+
+          {/* Test Status Banner */}
+          {testResult && (
+            <div
+              className={`p-4 rounded-2xl text-xs font-semibold flex items-start gap-2.5 ${
+                testResult.success
+                  ? 'bg-emerald-950/50 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/50 border border-rose-500/40 text-rose-300'
+              }`}
+            >
+              {testResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-1">
+                <div>{testResult.message}</div>
+                {testResult.claudeResponse && (
+                  <div className="text-[11px] text-emerald-200 font-mono italic">
+                    Claude replied: &ldquo;{testResult.claudeResponse}&rdquo;
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -186,8 +294,8 @@ export default function SettingsPage() {
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-ant-api..."
-                  className="w-full pl-10 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+                  placeholder="sk-ant-api03-..."
+                  className="w-full pl-10 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:border-amber-500 focus:outline-none"
                 />
               </div>
             </div>
