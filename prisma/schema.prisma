@@ -1,0 +1,377 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("ADMIN") // ADMIN, MANAGER
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model BusinessProfile {
+  id                 String   @id @default(cuid())
+  companyName        String   @default("Opal Chauffeurs")
+  tradingName        String   @default("Esteem Travel Service Pty Ltd")
+  website            String   @default("https://www.opalchauffeurs.com.au/")
+  description        String
+  phone              String   @default("+61 400 000 000")
+  email              String   @default("bookings@opalchauffeurs.com.au")
+  address            String   @default("18 Crawford Road")
+  suburb             String   @default("Clarinda")
+  state              String   @default("VIC")
+  postcode           String   @default("3169")
+  country            String   @default("Australia")
+  brandPositioning   String
+  emailSignature     String
+  collaborationOffer String
+  customNotes        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Service {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  category          String   // Corporate, Airport, VIP, Event, Hourly, Fleet, Wedding, Tours
+  shortDescription  String
+  fullDescription   String
+  features          String   // JSON string of feature bullet points
+  targetAudience    String
+  pricingModel      String?
+  suggestedKeywords String?
+  isActive          Boolean  @default(true)
+  displayOrder      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model ServiceLocation {
+  id              String   @id @default(cuid())
+  cityName        String
+  state           String
+  country         String   @default("Australia")
+  isPrimary       Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  serviceRadiusKm Int      @default(50)
+  priorityLevel   String   @default("HIGH") // HIGH, MEDIUM, EXPANSION
+  notes           String?
+  suburbs         Suburb[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Suburb {
+  id                String          @id @default(cuid())
+  name              String
+  postcode          String
+  locationId        String
+  location          ServiceLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  isPriority        Boolean         @default(true)
+  commercialHubType String          @default("BUSINESS_DISTRICT") // CBD, AIRPORT, BUSINESS_PARK, INDUSTRIAL, LUXURY_DIPLOMATIC
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model Company {
+  id                         String              @id @default(cuid())
+  name                       String
+  legalName                  String?
+  website                    String
+  domain                     String?
+  industry                   String
+  subIndustry                String?
+  city                       String              @default("Melbourne")
+  state                      String              @default("VIC")
+  country                    String              @default("Australia")
+  headquartersAddress        String?
+  approximateSize            String              @default("Medium (50-200)") // Small, Medium (50-200), Large (200-1000), Enterprise (1000+)
+  employeeCountEstimate      Int?
+  officeCount                Int                 @default(1)
+  internationalPresence      Boolean             @default(false)
+  corporateActivityLevel     String              @default("HIGH") // HIGH, MEDIUM, LOW
+  executiveTravelLikelihood  String              @default("HIGH") // HIGH, MEDIUM, LOW
+  eventHostingLikelihood     String              @default("MEDIUM") // HIGH, MEDIUM, LOW
+  isClientFacing             Boolean             @default(true)
+  status                     String              @default("DISCOVERED") // DISCOVERED, RESEARCHED, QUALIFIED, DRAFTED, IN_REVIEW, APPROVED, CONTACTED, REPLIED, DO_NOT_CONTACT, REJECTED
+  priority                   String              @default("HIGH") // HIGH, MEDIUM, MANUAL_REVIEW, LOW
+  opportunityScore           Float               @default(75.0)
+  isVerified                 Boolean             @default(false)
+  contacts                   Contact[]
+  research                   CompanyResearch?
+  opportunity                CompanyOpportunity?
+  emailDrafts                EmailDraft[]
+  sentEmails                 SentEmail[]
+  replies                    Reply[]
+  followUps                  FollowUp[]
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+}
+
+model CompanyResearch {
+  id               String   @id @default(cuid())
+  companyId        String   @unique
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  summary          String
+  businessModel    String
+  detectedSignals  String   // JSON string: { strong: [], medium: [], weak: [] }
+  evidenceSources  String   // JSON string: [{ title, url, snippet }]
+  confidenceLevel  Float    @default(0.85)
+  inferredDemand   String
+  confirmedEvidence String
+  researchDate     DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model CompanyOpportunity {
+  id                  String   @id @default(cuid())
+  companyId           String   @unique
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  score               Float
+  scoreBreakdown      String   // JSON string: { companySize: 20, locationRelevance: 15, travelDemand: 20, ... }
+  priority            String   // HIGH, MEDIUM, MANUAL_REVIEW, LOW
+  whyRelevant         String
+  recommendedServices String   // JSON string: ["Corporate & Executive Chauffeur", "Airport Transfers"]
+  targetUseCases      String   // JSON string: ["VIP client transfers", "Executive airport transit"]
+  confidenceScore     Float    @default(0.85)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Event {
+  id                     String            @id @default(cuid())
+  name                   String
+  slug                   String            @unique
+  eventType              String            @default("CONFERENCE") // CONFERENCE, TRADE_SHOW, EXHIBITION, GALA_DINNER, SPORTING_EVENT, FESTIVAL, CORPORATE_SUMMIT, VIP_GATHERING
+  startDate              DateTime
+  endDate                DateTime?
+  venueName              String
+  venueAddress           String?
+  suburb                 String            @default("Melbourne CBD")
+  city                   String            @default("Melbourne")
+  state                  String            @default("VIC")
+  expectedAttendance     Int?
+  ticketPriceRange       String?
+  vipPresenceLikelihood  String            @default("HIGH") // HIGH, MEDIUM, LOW
+  organizerName          String?
+  organizerCompany       String?
+  organizerWebsite       String?
+  status                 String            @default("DISCOVERED") // DISCOVERED, RESEARCHED, QUALIFIED, DRAFTED, APPROVED, CONTACTED, COMPLETED, IGNORED
+  priority               String            @default("HIGH") // HIGH, MEDIUM, MANUAL_REVIEW, LOW
+  opportunityScore       Float             @default(80.0)
+  sourceUrl              String?
+  contacts               Contact[]
+  research               EventResearch?
+  opportunity            EventOpportunity?
+  emailDrafts            EmailDraft[]
+  sentEmails             SentEmail[]
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+}
+
+model EventResearch {
+  id                          String   @id @default(cuid())
+  eventId                     String   @unique
+  event                       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  summary                     String
+  transportationDemandSignals String   // JSON string of signals
+  vipExecutiveRelevance       String
+  groupTransferPotential      String
+  airportTransferRelevance    String
+  evidenceSources             String   // JSON string: [{ title, url, snippet }]
+  confidenceScore             Float    @default(0.85)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+}
+
+model EventOpportunity {
+  id                  String   @id @default(cuid())
+  eventId             String   @unique
+  event               Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  score               Float
+  scoreBreakdown      String   // JSON string: { eventSize: 20, transportDemand: 25, vipRelevance: 15, ... }
+  priority            String   // HIGH, MEDIUM, MANUAL_REVIEW, LOW
+  whyRelevant         String
+  recommendedServices String   // JSON string of Opal services
+  outreachAngle       String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Contact {
+  id                 String       @id @default(cuid())
+  companyId          String?
+  company            Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  eventId            String?
+  event              Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fullName           String
+  firstName          String?
+  lastName           String?
+  jobTitle           String
+  department         String?
+  seniorityLevel     String       @default("DIRECTOR") // C_LEVEL, VP, DIRECTOR, MANAGER, SPECIALIST
+  email              String
+  emailSource        String       @default("OFFICIAL_WEBSITE") // OFFICIAL_WEBSITE, VERIFIED_DIRECTORY, PUBLIC_BUSINESS_LISTING, GENERIC_FALLBACK
+  emailConfidence    Float        @default(0.9)
+  verificationStatus String       @default("VERIFIED") // VERIFIED, LIKELY, UNVERIFIED, GENERIC_FALLBACK, MANUAL_REVIEW_NEEDED
+  linkedinUrl        String?
+  phone              String?
+  isPrimaryContact   Boolean      @default(true)
+  isDoNotContact     Boolean      @default(false)
+  emailDrafts        EmailDraft[]
+  sentEmails         SentEmail[]
+  replies            Reply[]
+  followUps          FollowUp[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model EmailDraft {
+  id                         String     @id @default(cuid())
+  companyId                  String?
+  company                    Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  eventId                    String?
+  event                      Event?     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contactId                  String?
+  contact                    Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  recipientName              String
+  recipientEmail             String
+  recipientRole              String
+  subject                    String
+  fixedContent               String
+  dynamicContent             String
+  fullBodyText               String
+  personalizationReasoning   String
+  aiEvidenceCited            String     // JSON string
+  status                     String     @default("READY_FOR_REVIEW") // DRAFT, READY_FOR_REVIEW, APPROVED, REJECTED, SENT
+  rejectionReason            String?    // NOT_RELEVANT, WRONG_CONTACT, EMAIL_QUALITY_ISSUE, ALREADY_CONTACTED, COMPANY_NOT_SUITABLE, OTHER
+  rejectionFeedbackNotes     String?
+  approvedAt                 DateTime?
+  approvedBy                 String?
+  sentAt                     DateTime?
+  sentEmail                  SentEmail?
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
+}
+
+model SentEmail {
+  id             String     @id @default(cuid())
+  draftId        String     @unique
+  draft          EmailDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  companyId      String?
+  company        Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  eventId        String?
+  event          Event?     @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  contactId      String?
+  contact        Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  recipientEmail String
+  recipientName  String
+  subject        String
+  exactSentBody  String
+  sentAt         DateTime   @default(now())
+  deliveryStatus String     @default("DELIVERED") // DELIVERED, OPENED, CLICKED, BOUNCED, FAILED
+  hasReply       Boolean    @default(false)
+  replies        Reply[]
+  followUps      FollowUp[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model Reply {
+  id                 String     @id @default(cuid())
+  sentEmailId        String
+  sentEmail          SentEmail  @relation(fields: [sentEmailId], references: [id], onDelete: Cascade)
+  companyId          String?
+  company            Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId          String?
+  contact            Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  senderEmail        String
+  subject            String
+  bodyText           String
+  receivedAt         DateTime   @default(now())
+  aiClassification   String     @default("INTERESTED") // INTERESTED, MEETING_REQUEST, MORE_INFO_REQUESTED, PRICING_REQUESTED, FOLLOW_UP_REQUIRED, NOT_INTERESTED, UNCLEAR, OTHER
+  aiExecutiveSummary String
+  aiDetectedIntent   String
+  aiSuggestedAction  String
+  aiDraftedReply     String
+  status             String     @default("NEW") // NEW, REVIEWED, REPLIED, ARCHIVED
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+}
+
+model FollowUp {
+  id            String    @id @default(cuid())
+  sentEmailId   String
+  sentEmail     SentEmail @relation(fields: [sentEmailId], references: [id], onDelete: Cascade)
+  companyId     String?
+  company       Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  stepNumber    Int       @default(1) // 1 = Day 5, 2 = Day 10, etc.
+  scheduledDate DateTime
+  status        String    @default("SCHEDULED") // SCHEDULED, SENT, CANCELLED, SKIPPED
+  cancelReason  String?   // REPLY_RECEIVED, OPT_OUT, REJECTED, MANUAL_STOP
+  draftSubject  String
+  draftBody     String
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // HIGH_PRIORITY_COMPANY, HIGH_PRIORITY_EVENT, CONTACT_FOUND, DRAFT_READY, REPLY_RECEIVED, FOLLOW_UP_DUE, JOB_COMPLETED, JOB_ERROR
+  title     String
+  message   String
+  linkUrl   String?
+  isRead    Boolean  @default(false)
+  metadata  String?  // JSON string
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  action      String   // DISCOVERY, RESEARCH, SCORE_GENERATED, CONTACT_FOUND, DRAFT_GENERATED, DRAFT_EDITED, DRAFT_APPROVED, DRAFT_REJECTED, EMAIL_SENT, REPLY_RECEIVED, FOLLOW_UP_CREATED, SETTING_UPDATED, JOB_RUN
+  entityType  String   // COMPANY, EVENT, CONTACT, DRAFT, SENT_EMAIL, REPLY, SETTING
+  entityId    String?
+  actor       String   @default("AI_ENGINE") // AI_ENGINE, ADMIN_USER, BACKGROUND_SCHEDULER
+  description String
+  details     String?  // JSON string
+  createdAt   DateTime @default(now())
+}
+
+model BackgroundJob {
+  id                String    @id @default(cuid())
+  jobType           String    @unique // CORPORATE_DISCOVERY, EVENT_DISCOVERY, ENRICHMENT_SCAN, FOLLOW_UP_CHECK, INBOX_MONITOR
+  title             String
+  frequency         String    @default("DAILY") // HOURLY, DAILY, WEEKLY, MANUAL
+  lastRunAt         DateTime?
+  nextRunAt         DateTime?
+  status            String    @default("IDLE") // IDLE, RUNNING, SUCCESS, FAILED
+  lastResultSummary String?
+  itemsProcessed    Int       @default(0)
+  errorsCount       Int       @default(0)
+  isEnabled         Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model SystemSettings {
+  id          String   @id @default(cuid())
+  category    String   // AI_CONFIG, SCORING_WEIGHTS, EMAIL_DEFAULTS, SCHEDULER
+  key         String   @unique
+  value       String   // JSON or text string
+  description String?
+  updatedAt   DateTime @updatedAt
+}

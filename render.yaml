@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: opal-outreach-ai
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run render-build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:./dev.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: sonutripathi9305@gmail.com
+      - key: ADMIN_PASSWORD
+        value: "02122025"
+      - key: ANTHROPIC_API_KEY
+        value: ""
+      - key: AI_MODEL_PRIMARY
+        value: claude-3-5-sonnet-20241022
+      - key: NEXT_PUBLIC_APP_NAME
+        value: Opal Outreach AI
+      - key: NEXT_PUBLIC_COMPANY_NAME
+        value: Opal Chauffeurs
+      - key: NEXT_PUBLIC_WEBSITE
+        value: https://www.opalchauffeurs.com.au/
