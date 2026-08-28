@@ -469,8 +469,10 @@ export default function CompaniesPage() {
             <div className="flex flex-wrap gap-1.5">
               {[
                 { label: '🏢 Melbourne CBD (Collins / William St)', value: 'Melbourne CBD' },
+                { label: '🛍️ South Yarra (Chapel St & Toorak Rd)', value: 'South Yarra' },
                 { label: '🎰 Southbank (Crown & Riverfront)', value: 'Southbank' },
                 { label: '🏟️ Docklands (ANZ / Collins Sq)', value: 'Docklands' },
+                { label: '🚀 Richmond (Church St Tech Hub)', value: 'Richmond' },
                 { label: '🌳 St Kilda Road (Corporate Park)', value: 'St Kilda Road' },
                 { label: '🏭 Clayton (Monash Tech & SE)', value: 'Clayton' },
                 { label: '🌆 Sydney CBD (Barangaroo)', value: 'Sydney' },
