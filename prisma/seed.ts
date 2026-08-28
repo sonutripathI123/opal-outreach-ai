@@ -39,7 +39,7 @@ async function main() {
         country: 'Australia',
         brandPositioning:
           'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability with first-class sedans, luxury SUVs, and executive people movers tailored for corporate partners, executive travellers, and prestigious events.',
-        emailSignature: `Warm regards,\n\nCorporate Partnerships Team\nOpal Chauffeurs (Esteem Travel Service Pty Ltd)\n18 Crawford Road, Clarinda VIC 3169\nWeb: https://www.opalchauffeurs.com.au/\nEmail: bookings@opalchauffeurs.com.au | Direct: +61 400 000 000`,
+        emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
         collaborationOffer:
           'Introducing Opal Chauffeurs as your dedicated executive transportation and corporate travel partner. We provide seamless corporate account onboarding, priority flight-tracked airport transfers, executive client transit, and tailored corporate event coordination.',
         customNotes:

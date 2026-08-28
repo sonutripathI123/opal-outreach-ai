@@ -31,6 +31,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     if (!dispatchResult.success) {
       console.warn('Real SMTP dispatch warning:', dispatchResult.error);
+      return NextResponse.json({
+        success: false,
+        error: `SMTP Dispatch Error: ${dispatchResult.error || 'Failed to deliver email'}. Please check that recipient email is valid and SMTP credentials are saved in /settings.`
+      }, { status: 400 });
     }
 
     // 2. Create immutable SentEmail record
@@ -78,8 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const day5 = new Date(now + 1000 * 60 * 60 * 24 * 5);
     const day10 = new Date(now + 1000 * 60 * 60 * 24 * 10);
     const recipientFirstName = draft.recipientName.split(' ')[0] || draft.recipientName;
-
-    const followUpSignature = `Warm regards,\n\n${recipientFirstName},\n\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`;
+    const followUpSignature = `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`;
 
     await prisma.followUp.createMany({
       data: [

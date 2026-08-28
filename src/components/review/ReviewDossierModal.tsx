@@ -121,25 +121,41 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
   };
 
   const handleSend = async () => {
-    if (!confirm(`Are you sure you want to officially send this personalized outreach email to ${draft.recipientEmail}?`)) {
+    const targetEmail = recipientEmail || draft.recipientEmail;
+    if (!confirm(`Are you sure you want to officially send this personalized outreach email to ${targetEmail}?`)) {
       return;
     }
     setSending(true);
     try {
+      // 1. Auto-save any edits if modified
+      if (
+        (recipientEmail && recipientEmail !== draft.recipientEmail) ||
+        (subject && subject !== draft.subject) ||
+        (fullBodyText && fullBodyText !== draft.fullBodyText)
+      ) {
+        await fetch(`/api/outreach/drafts/${draft.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, fullBodyText, recipientEmail }),
+        });
+      }
+
+      // 2. Dispatch the email
       const res = await fetch(`/api/outreach/drafts/${draft.id}/send`, {
         method: 'POST',
       });
-      if (res.ok) {
-        alert('Email successfully dispatched to recipient and recorded in permanent sent vault.');
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert(`✨ Email successfully dispatched to ${targetEmail}!\n\nDelivery Mode: ${data.dispatchResult?.mode === 'REAL_SMTP' ? 'Real SMTP Inbox Delivery' : 'Recorded in CRM Vault'}`);
         onRefresh();
         onClose();
       } else {
-        const data = await res.json();
-        alert(`Failed to send: ${data.error}`);
+        alert(`❌ Failed to send: ${data.error || 'SMTP delivery failed. Please check recipient email or your SMTP settings.'}`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert('Error dispatching email');
+      alert(`❌ Error dispatching email: ${e.message || 'Network error'}`);
     } finally {
       setSending(false);
     }
@@ -493,11 +509,12 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
               )}
 
               <button
+                type="button"
                 onClick={handleSend}
                 disabled={sending || draft.status === 'SENT'}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
-                <Send className="w-4 h-4" />
+                {sending ? <RotateCcw className="w-4 h-4 animate-spin text-slate-950" /> : <Send className="w-4 h-4 text-slate-950" />}
                 <span>{draft.status === 'SENT' ? 'Already Dispatched' : sending ? 'Dispatching...' : 'Approve & Send Now'}</span>
               </button>
             </div>
