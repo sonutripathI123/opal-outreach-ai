@@ -1,5 +1,15 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 import { prisma } from '@/lib/prisma';
+
+// Force Node.js to prioritize IPv4 DNS lookups on cloud environments (fixes Render ENETUNREACH IPv6 bug)
+try {
+  if (typeof dns.setDefaultResultOrder === 'function') {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+} catch (e) {
+  console.warn('Could not set dns default result order:', e);
+}
 
 export interface EmailSendOptions {
   to: string;
@@ -22,43 +32,36 @@ export interface SmtpConfig {
 
 export class EmailDispatcher {
   /**
-   * Creates an optimized Nodemailer transporter with instant IPv4 routing & auto space-stripping
+   * Creates an optimized Nodemailer transporter with strict IPv4 routing & auto space-stripping
    */
   static createTransporter(config: SmtpConfig) {
     const cleanUser = (config.user || '').trim();
     const cleanPass = (config.pass || '').replace(/\s+/g, ''); // Auto-remove spaces from Google App Passwords
+    const cleanHost = (config.host || '').trim();
     const isGmail =
-      (config.host || '').toLowerCase().includes('gmail') ||
+      cleanHost.toLowerCase().includes('gmail') ||
       cleanUser.toLowerCase().endsWith('@gmail.com');
 
-    if (isGmail) {
-      return nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: cleanUser,
-          pass: cleanPass,
-        },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 12000,
-      });
-    }
+    const host = isGmail ? 'smtp.gmail.com' : cleanHost;
+    const port = Number(config.port) || 465;
+    const secure = config.secure !== undefined ? Boolean(config.secure) : (port === 465);
 
     return nodemailer.createTransport({
-      host: (config.host || '').trim(),
-      port: Number(config.port) || 465,
-      secure: config.secure !== undefined ? Boolean(config.secure) : (Number(config.port) === 465),
+      host,
+      port,
+      secure,
       auth: {
         user: cleanUser,
         pass: cleanPass,
       },
+      family: 4, // STRICT IPV4: Prevents Render ENETUNREACH on IPv6
       tls: {
         rejectUnauthorized: false,
       },
-      connectionTimeout: 8000,
-      greetingTimeout: 8000,
-      socketTimeout: 12000,
-    });
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    } as any);
   }
 
   /**
@@ -106,7 +109,7 @@ export class EmailDispatcher {
   }
 
   /**
-   * Dispatches an email via configured SMTP with instant connection
+   * Dispatches an email via configured SMTP with instant IPv4 connection
    */
   static async sendEmail(options: EmailSendOptions): Promise<{
     success: boolean;
