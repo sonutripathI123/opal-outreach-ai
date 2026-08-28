@@ -557,121 +557,164 @@ export default function CompaniesPage() {
             </div>
           </div>
 
-          {/* Target List Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[50vh] overflow-y-auto pr-1">
-            {radarTargets.map((item, idx) => {
-              const apolloUrl = `https://app.apollo.io/#/people?qOrganizationDomains=${encodeURIComponent(item.domain)}&personTitles[]=Executive%20Assistant&personTitles[]=Head%20of%20Operations&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Office%20Manager`;
-              const isAlreadyMonitored = companies.some(
-                (c) =>
-                  c.name?.toLowerCase() === item.name?.toLowerCase() ||
-                  c.website?.toLowerCase().includes(item.domain?.toLowerCase())
-              );
+          {/* Target List Grid or Clean Suburb Not Found State */}
+          {radarTargets.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[50vh] overflow-y-auto pr-1">
+              {radarTargets.map((item, idx) => {
+                const apolloUrl = `https://app.apollo.io/#/people?qOrganizationDomains=${encodeURIComponent(item.domain)}&personTitles[]=Executive%20Assistant&personTitles[]=Head%20of%20Operations&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Office%20Manager`;
+                const isAlreadyMonitored = companies.some(
+                  (c) =>
+                    c.name?.toLowerCase() === item.name?.toLowerCase() ||
+                    c.website?.toLowerCase().includes(item.domain?.toLowerCase())
+                );
 
-              return (
-                <div
-                  key={idx}
-                  className={`p-4 rounded-2xl bg-slate-950/80 border transition-all flex flex-col justify-between space-y-3 ${
-                    isAlreadyMonitored ? 'border-emerald-500/40' : 'border-slate-800 hover:border-amber-500/40'
-                  }`}
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-slate-100">{item.name}</h4>
-                          {isAlreadyMonitored && (
-                            <Badge variant="emerald" size="sm">
-                              ✓ MONITORED
-                            </Badge>
-                          )}
+                return (
+                  <div
+                    key={idx}
+                    className={`p-4 rounded-2xl bg-slate-950/80 border transition-all flex flex-col justify-between space-y-3 ${
+                      isAlreadyMonitored ? 'border-emerald-500/40' : 'border-slate-800 hover:border-amber-500/40'
+                    }`}
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-slate-100">{item.name}</h4>
+                            {isAlreadyMonitored && (
+                              <Badge variant="emerald" size="sm">
+                                ✓ MONITORED
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-amber-400 font-mono">{item.domain}</div>
                         </div>
-                        <div className="text-[11px] text-amber-400 font-mono">{item.domain}</div>
+                        <Badge variant="gold" size="sm">
+                          {item.suburb}
+                        </Badge>
                       </div>
-                      <Badge variant="gold" size="sm">
-                        {item.suburb}
-                      </Badge>
+
+                      <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                        <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
+                        <span className="truncate">{item.address}</span>
+                      </div>
+
+                      <p className="text-xs text-slate-300 font-medium line-clamp-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                        <b className="text-amber-400">Demand Reason: </b>{item.whyTarget}
+                      </p>
+
+                      <div className="text-[10px] text-slate-400">
+                        <span className="font-semibold text-slate-300">Target Roles: </span>
+                        {item.targetRoles?.join(', ')}
+                      </div>
                     </div>
 
-                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                      <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
-                      <span className="truncate">{item.address}</span>
-                    </div>
-
-                    <p className="text-xs text-slate-300 font-medium line-clamp-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-                      <b className="text-amber-400">Demand Reason: </b>{item.whyTarget}
-                    </p>
-
-                    <div className="text-[10px] text-slate-400">
-                      <span className="font-semibold text-slate-300">Target Roles: </span>
-                      {item.targetRoles?.join(', ')}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-900 flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-slate-500">{item.size}</span>
-                    
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={apolloUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-semibold flex items-center gap-1 transition-colors"
-                      >
-                        <span>Apollo</span>
-                        <ExternalLink className="w-3 h-3 text-sky-400" />
-                      </a>
-
-                      {isAlreadyMonitored ? (
-                        <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>In Queue</span>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setRadarImportingDomain(item.domain);
-                            try {
-                              const res = await fetch('/api/companies', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  name: item.name,
-                                  website: `https://${item.domain}`,
-                                  industry: item.industry,
-                                  headquartersAddress: item.address,
-                                  city: 'Melbourne',
-                                  state: 'VIC',
-                                  approximateSize: item.size || 'Large (200-1000)',
-                                  contactName: 'Director of Operations',
-                                  contactRole: item.targetRoles?.[0] || 'Head of Executive Travel',
-                                  contactEmail: `travel@${item.domain}`,
-                                }),
-                              });
-                              if (res.ok) {
-                                setRadarSuccessMsg(`"${item.name}" imported and proposal drafted in Review Queue!`);
-                                fetchCompanies();
-                                setTimeout(() => setRadarSuccessMsg(null), 4000);
-                              }
-                            } catch (e) {
-                              console.error(e);
-                            } finally {
-                              setRadarImportingDomain(null);
-                            }
-                          }}
-                          disabled={radarImportingDomain === item.domain}
-                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow flex items-center gap-1 transition-all disabled:opacity-50"
+                    <div className="pt-2 border-t border-slate-900 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-slate-500">{item.size}</span>
+                      
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={apolloUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-semibold flex items-center gap-1 transition-colors"
                         >
-                          <Sparkles className="w-3 h-3" />
-                          <span>{radarImportingDomain === item.domain ? 'Importing...' : 'Import & Pitch'}</span>
-                        </button>
-                      )}
+                          <span>Apollo</span>
+                          <ExternalLink className="w-3 h-3 text-sky-400" />
+                        </a>
+
+                        {isAlreadyMonitored ? (
+                          <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>In Queue</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setRadarImportingDomain(item.domain);
+                              try {
+                                const res = await fetch('/api/companies', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    name: item.name,
+                                    website: `https://${item.domain}`,
+                                    industry: item.industry,
+                                    headquartersAddress: item.address,
+                                    city: 'Melbourne',
+                                    state: 'VIC',
+                                    approximateSize: item.size || 'Large (200-1000)',
+                                    contactName: 'Director of Operations',
+                                    contactRole: item.targetRoles?.[0] || 'Head of Executive Travel',
+                                    contactEmail: `travel@${item.domain}`,
+                                  }),
+                                });
+                                if (res.ok) {
+                                  setRadarSuccessMsg(`"${item.name}" imported and proposal drafted in Review Queue!`);
+                                  fetchCompanies();
+                                  setTimeout(() => setRadarSuccessMsg(null), 4000);
+                                }
+                              } catch (e) {
+                                console.error(e);
+                              } finally {
+                                setRadarImportingDomain(null);
+                              }
+                            }}
+                            disabled={radarImportingDomain === item.domain}
+                            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow flex items-center gap-1 transition-all disabled:opacity-50"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            <span>{radarImportingDomain === item.domain ? 'Importing...' : 'Import & Pitch'}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-8 text-center rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+                <MapPin className="w-6 h-6" />
+              </div>
+              <div className="space-y-1.5 max-w-md mx-auto">
+                <h3 className="text-sm font-bold text-slate-100">
+                  Yeh Suburb Abhi Catalog Mein Added Nahi Hai: &ldquo;{radarLocationQuery}&rdquo;
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Fake/Demo data se bachne ke liye sirf 100% verified Australian enterprises hi show kiye jate hain. Aap niche diye gaye mapped commercial hubs me se select kar sakte hain:
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 pt-2 max-w-xl mx-auto">
+                {[
+                  { label: '🏢 Melbourne CBD', value: 'Melbourne CBD' },
+                  { label: '🛍️ South Yarra', value: 'South Yarra' },
+                  { label: '🎰 Southbank', value: 'Southbank' },
+                  { label: '🏟️ Docklands', value: 'Docklands' },
+                  { label: '🚀 Richmond', value: 'Richmond' },
+                  { label: '🌳 St Kilda Road', value: 'St Kilda Road' },
+                  { label: '🏭 Clayton', value: 'Clayton' },
+                  { label: '🏥 Carlton', value: 'Carlton' },
+                  { label: '🏥 Box Hill', value: 'Box Hill' },
+                  { label: '🌆 Sydney', value: 'Sydney' },
+                  { label: '🌆 Brisbane', value: 'Brisbane' },
+                ].map((chip) => (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    onClick={() => {
+                      setRadarLocationQuery(chip.value);
+                      handleScanLocationForCompanies(chip.value);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-800 text-xs font-semibold transition-colors"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end pt-3 border-t border-slate-800">
             <button
