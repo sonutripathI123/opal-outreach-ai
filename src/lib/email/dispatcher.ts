@@ -22,6 +22,46 @@ export interface SmtpConfig {
 
 export class EmailDispatcher {
   /**
+   * Creates an optimized Nodemailer transporter with instant IPv4 routing & auto space-stripping
+   */
+  static createTransporter(config: SmtpConfig) {
+    const cleanUser = (config.user || '').trim();
+    const cleanPass = (config.pass || '').replace(/\s+/g, ''); // Auto-remove spaces from Google App Passwords
+    const isGmail =
+      (config.host || '').toLowerCase().includes('gmail') ||
+      cleanUser.toLowerCase().endsWith('@gmail.com');
+
+    if (isGmail) {
+      return nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: cleanUser,
+          pass: cleanPass,
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 12000,
+      });
+    }
+
+    return nodemailer.createTransport({
+      host: (config.host || '').trim(),
+      port: Number(config.port) || 465,
+      secure: config.secure !== undefined ? Boolean(config.secure) : (Number(config.port) === 465),
+      auth: {
+        user: cleanUser,
+        pass: cleanPass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 12000,
+    });
+  }
+
+  /**
    * Retrieves active SMTP configuration from database or env variables
    */
   static async getSmtpConfig(): Promise<SmtpConfig | null> {
@@ -66,7 +106,7 @@ export class EmailDispatcher {
   }
 
   /**
-   * Dispatches an email via configured SMTP (Google Workspace / Custom)
+   * Dispatches an email via configured SMTP with instant connection
    */
   static async sendEmail(options: EmailSendOptions): Promise<{
     success: boolean;
@@ -86,15 +126,7 @@ export class EmailDispatcher {
     }
 
     try {
-      const transporter = nodemailer.createTransport({
-        host: config.host,
-        port: config.port,
-        secure: config.secure,
-        auth: {
-          user: config.user,
-          pass: config.pass,
-        },
-      });
+      const transporter = this.createTransporter(config);
 
       const formattedFrom = `"${config.fromName}" <${config.fromEmail}>`;
       const formattedTo = options.toName ? `"${options.toName}" <${options.to}>` : options.to;
@@ -131,15 +163,7 @@ export class EmailDispatcher {
     testRecipient: string
   ): Promise<{ success: boolean; message: string; messageId?: string }> {
     try {
-      const transporter = nodemailer.createTransport({
-        host: config.host,
-        port: config.port,
-        secure: config.secure,
-        auth: {
-          user: config.user,
-          pass: config.pass,
-        },
-      });
+      const transporter = this.createTransporter(config);
 
       await transporter.verify();
 
@@ -147,7 +171,7 @@ export class EmailDispatcher {
         from: `"${config.fromName}" <${config.fromEmail}>`,
         to: testRecipient,
         subject: '✨ Opal Outreach AI - Real Email Delivery Test Successful',
-        text: `Hello,\n\nThis is a verification test from Opal Outreach AI.\n\nYour outgoing email configuration for ${config.fromEmail} via ${config.host} is 100% operational!\n\nWarm regards,\nOpal Chauffeurs Intelligence Team`,
+        text: `Hello,\n\nThis is a verification test from Opal Outreach AI.\n\nYour outgoing email configuration for ${config.fromEmail} is 100% operational!\n\nWarm regards,\nInaya\nOpal Chauffeurs Intelligence Team`,
       });
 
       return {
