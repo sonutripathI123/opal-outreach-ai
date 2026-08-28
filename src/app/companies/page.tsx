@@ -40,6 +40,10 @@ export default function CompaniesPage() {
 
   // Target Radar State
   const [radarTargets, setRadarTargets] = useState<any[]>([]);
+  const [radarLocationQuery, setRadarLocationQuery] = useState('Melbourne CBD');
+  const [radarScanning, setRadarScanning] = useState(false);
+  const [radarImportingDomain, setRadarImportingDomain] = useState<string | null>(null);
+  const [radarSuccessMsg, setRadarSuccessMsg] = useState<string | null>(null);
   const [copiedDomains, setCopiedDomains] = useState(false);
 
   // CSV Import State
@@ -85,21 +89,34 @@ export default function CompaniesPage() {
     }
   };
 
-  const fetchRadarTargets = async () => {
+  const handleScanLocationForCompanies = async (locQuery: string) => {
+    setRadarScanning(true);
+    setRadarSuccessMsg(null);
     try {
-      const res = await fetch('/api/companies/target-radar');
+      const res = await fetch('/api/companies/scan-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationQuery: locQuery }),
+      });
       if (res.ok) {
         const data = await res.json();
         setRadarTargets(data.companies || []);
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setRadarScanning(false);
     }
+  };
+
+  const openRadarModal = () => {
+    setIsRadarOpen(true);
+    handleScanLocationForCompanies(radarLocationQuery);
   };
 
   useEffect(() => {
     fetchCompanies();
-    fetchRadarTargets();
+    handleScanLocationForCompanies('Melbourne CBD');
   }, [search, priorityFilter, statusFilter]);
 
   const handleCopyDomains = () => {
@@ -261,11 +278,11 @@ export default function CompaniesPage() {
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 self-start sm:self-auto">
             <button
-              onClick={() => setIsRadarOpen(true)}
-              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold shadow-md flex items-center gap-2 transition-all"
+              onClick={openRadarModal}
+              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all"
             >
-              <Radar className="w-4 h-4 text-amber-400 animate-spin" style={{ animationDuration: '6s' }} />
-              <span>🎯 Melbourne Target Radar</span>
+              <Radar className="w-4 h-4 text-slate-950 animate-pulse" />
+              <span>📡 Location Target Radar</span>
             </button>
 
             <button
@@ -441,80 +458,105 @@ export default function CompaniesPage() {
       <Modal
         isOpen={isRadarOpen}
         onClose={() => setIsRadarOpen(false)}
-        title="🎯 Location & Suburb Corporate Target Radar"
-        subtitle="Discover top high-mobility enterprises by Melbourne & Australian suburbs with 1-click direct AI pitch generation and Apollo search links."
+        title="📡 Location & Suburb Corporate Target Radar"
+        subtitle="Enter any Suburb, Commercial Precinct, or Australian City to scan & discover top enterprises with 1-click AI pitch generation."
         maxWidth="5xl"
       >
         <div className="space-y-5">
-          {/* Suburb Preset Chips & Search */}
-          <div className="space-y-3 p-4 rounded-2xl bg-slate-950 border border-slate-800">
-            <div>
-              <div className="text-[11px] font-semibold text-slate-400 mb-2">Filter by Commercial Suburb / Precinct:</div>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: 'All Locations', value: 'ALL' },
-                  { label: '🏢 Melbourne CBD (Collins / William St)', value: 'Melbourne CBD' },
-                  { label: '🎰 Southbank', value: 'Southbank' },
-                  { label: '🏟️ Docklands', value: 'Docklands' },
-                  { label: '🌳 St Kilda Road', value: 'St Kilda Road' },
-                  { label: '🏭 Clayton & SE', value: 'Clayton' },
-                  { label: '🌆 Sydney CBD', value: 'Sydney' },
-                  { label: '🌆 Brisbane', value: 'Brisbane' },
-                ].map((chip) => (
-                  <button
-                    key={chip.value}
-                    type="button"
-                    onClick={() => setPriorityFilter((prev) => prev)} // trigger re-render
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                      (search === chip.value || (chip.value === 'ALL' && !search))
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow'
-                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
-                    }`}
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
+          {/* Preset Suburb Chips */}
+          <div>
+            <div className="text-[11px] font-semibold text-slate-400 mb-2">Quick Suburb & Commercial Precinct Presets:</div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: '🏢 Melbourne CBD (Collins / William St)', value: 'Melbourne CBD' },
+                { label: '🎰 Southbank (Crown & Riverfront)', value: 'Southbank' },
+                { label: '🏟️ Docklands (ANZ / Collins Sq)', value: 'Docklands' },
+                { label: '🌳 St Kilda Road (Corporate Park)', value: 'St Kilda Road' },
+                { label: '🏭 Clayton (Monash Tech & SE)', value: 'Clayton' },
+                { label: '🌆 Sydney CBD (Barangaroo)', value: 'Sydney' },
+                { label: '🌆 Brisbane (Queen St)', value: 'Brisbane' },
+              ].map((chip) => (
+                <button
+                  key={chip.value}
+                  type="button"
+                  onClick={() => {
+                    setRadarLocationQuery(chip.value);
+                    handleScanLocationForCompanies(chip.value);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    radarLocationQuery === chip.value
+                      ? 'bg-amber-500 text-slate-950 font-bold shadow'
+                      : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Suburb Search Input Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
+            <div className="relative flex-1">
+              <MapPin className="w-4 h-4 text-amber-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                value={radarLocationQuery}
+                onChange={(e) => setRadarLocationQuery(e.target.value)}
+                placeholder="Enter any Suburb or Location (e.g. Southbank, Docklands, Clayton, Richmond, Sydney, Brisbane)..."
+                onKeyDown={(e) => e.key === 'Enter' && handleScanLocationForCompanies(radarLocationQuery)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleScanLocationForCompanies(radarLocationQuery)}
+              disabled={radarScanning || !radarLocationQuery.trim()}
+              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 disabled:opacity-50 transition-all shrink-0"
+            >
+              {radarScanning ? <Radar className="w-4 h-4 animate-spin text-slate-950" /> : <Search className="w-4 h-4 text-slate-950" />}
+              <span>{radarScanning ? 'Scanning Suburb...' : 'Scan Suburb'}</span>
+            </button>
+          </div>
+
+          {/* Success / Feedback Banner */}
+          {radarSuccessMsg && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{radarSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Discovered Target Companies List Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+            <div className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span>Discovered Enterprises ({radarTargets.length})</span>
+              <span className="text-[11px] font-normal text-slate-500">for &ldquo;{radarLocationQuery}&rdquo;</span>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Filter radar targets by company name, suburb, or industry..."
-                  className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  onChange={(e) => {
-                    const q = e.target.value.toLowerCase();
-                    // Live client filter
-                  }}
-                />
-              </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyDomains}
+                className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>{copiedDomains ? '✓ Copied!' : 'Copy Domains'}</span>
+              </button>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleCopyDomains}
-                  className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{copiedDomains ? '✓ Copied!' : 'Copy Domains'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadRadarCsv}
-                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Export CSV</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleDownloadRadarCsv}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-400" />
+                <span>Export CSV</span>
+              </button>
             </div>
           </div>
 
           {/* Target List Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[55vh] overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[50vh] overflow-y-auto pr-1">
             {radarTargets.map((item, idx) => {
               const apolloUrl = `https://app.apollo.io/#/people?qOrganizationDomains=${encodeURIComponent(item.domain)}&personTitles[]=Executive%20Assistant&personTitles[]=Head%20of%20Operations&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Office%20Manager`;
               const isAlreadyMonitored = companies.some(
@@ -554,7 +596,7 @@ export default function CompaniesPage() {
                     </div>
 
                     <p className="text-xs text-slate-300 font-medium line-clamp-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-                      {item.whyTarget}
+                      <b className="text-amber-400">Demand Reason: </b>{item.whyTarget}
                     </p>
 
                     <div className="text-[10px] text-slate-400">
@@ -577,10 +619,16 @@ export default function CompaniesPage() {
                         <ExternalLink className="w-3 h-3 text-sky-400" />
                       </a>
 
-                      {!isAlreadyMonitored && (
+                      {isAlreadyMonitored ? (
+                        <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>In Queue</span>
+                        </span>
+                      ) : (
                         <button
                           type="button"
                           onClick={async () => {
+                            setRadarImportingDomain(item.domain);
                             try {
                               const res = await fetch('/api/companies', {
                                 method: 'POST',
@@ -593,22 +641,27 @@ export default function CompaniesPage() {
                                   city: 'Melbourne',
                                   state: 'VIC',
                                   approximateSize: item.size || 'Large (200-1000)',
-                                  contactName: 'Corporate Travel Lead',
-                                  contactRole: item.targetRoles?.[0] || 'Executive Operations Director',
+                                  contactName: 'Director of Operations',
+                                  contactRole: item.targetRoles?.[0] || 'Head of Executive Travel',
                                   contactEmail: `travel@${item.domain}`,
                                 }),
                               });
                               if (res.ok) {
+                                setRadarSuccessMsg(`"${item.name}" imported and proposal drafted in Review Queue!`);
                                 fetchCompanies();
+                                setTimeout(() => setRadarSuccessMsg(null), 4000);
                               }
                             } catch (e) {
                               console.error(e);
+                            } finally {
+                              setRadarImportingDomain(null);
                             }
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow flex items-center gap-1 transition-all"
+                          disabled={radarImportingDomain === item.domain}
+                          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow flex items-center gap-1 transition-all disabled:opacity-50"
                         >
                           <Sparkles className="w-3 h-3" />
-                          <span>Import & Pitch</span>
+                          <span>{radarImportingDomain === item.domain ? 'Importing...' : 'Import & Pitch'}</span>
                         </button>
                       )}
                     </div>
@@ -616,6 +669,16 @@ export default function CompaniesPage() {
                 </div>
               );
             })}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsRadarOpen(false)}
+              className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+            >
+              Close Radar
+            </button>
           </div>
         </div>
       </Modal>
