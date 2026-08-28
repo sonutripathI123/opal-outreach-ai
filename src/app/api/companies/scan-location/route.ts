@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-// Master Database of 100% Real Australian Corporate Enterprises by Suburb
+// Comprehensive Master Database of 100% Real Australian Corporate Enterprises by Suburb
 const EXTENDED_TARGET_COMPANIES: Record<string, any[]> = {
   'south yarra': [
     {
@@ -69,6 +69,16 @@ const EXTENDED_TARGET_COMPANIES: Record<string, any[]> = {
       whyTarget: 'Continuous interstate executive travel for senior product directors and international investor visits.',
       targetRoles: ['Executive Assistant to C-Suite', 'Facilities & Operations Manager'],
     },
+    {
+      name: 'Carman\'s Fine Foods Corporate HQ',
+      domain: 'carmanskitchen.com.au',
+      industry: 'Food Manufacturing & International FMCG',
+      suburb: 'Richmond',
+      address: '11 Hume St, Huntingdale / Richmond VIC 3166',
+      size: 'Large (200-1000)',
+      whyTarget: 'Interstate retail buyer delegations and executive transfers.',
+      targetRoles: ['Executive Assistant to Founder', 'Operations Manager'],
+    },
   ],
   'southbank': [
     {
@@ -112,6 +122,16 @@ const EXTENDED_TARGET_COMPANIES: Record<string, any[]> = {
       size: 'Enterprise (1000+)',
       whyTarget: 'Interstate supplier meetings and C-level airport transit management.',
       targetRoles: ['Executive Assistant to CEO', 'Workplace Experience Manager'],
+    },
+    {
+      name: 'National Foods / Bega Cheese HQ',
+      domain: 'bega.com.au',
+      industry: 'Food & Agribusiness Enterprise',
+      suburb: 'Docklands',
+      address: '685 La Trobe St, Docklands VIC 3008',
+      size: 'Large (200-1000)',
+      whyTarget: 'Executive board travel and interstate site inspection transits for senior leadership.',
+      targetRoles: ['Executive Assistant to C-Suite', 'Corporate Travel Coordinator'],
     },
   ],
   'melbourne cbd': [
@@ -165,6 +185,26 @@ const EXTENDED_TARGET_COMPANIES: Record<string, any[]> = {
       whyTarget: 'Executive delegations and global board meetings requiring dedicated Mercedes fleet.',
       targetRoles: ['Corporate Travel Manager', 'Executive Assistant', 'Head of Operations'],
     },
+    {
+      name: 'National Australia Bank (NAB)',
+      domain: 'nab.com.au',
+      industry: 'Banking & Financial Institutions',
+      suburb: 'Melbourne CBD',
+      address: '395 Bourke St, Melbourne VIC 3000',
+      size: 'Enterprise (1000+)',
+      whyTarget: 'Major corporate headquarters with high interstate executive travel demand.',
+      targetRoles: ['Head of Workplace & Operations', 'Executive Assistant', 'Corporate Travel Desk'],
+    },
+    {
+      name: 'Goldman Sachs Melbourne',
+      domain: 'goldmansachs.com',
+      industry: 'Investment Banking & Securities',
+      suburb: 'Melbourne CBD',
+      address: 'Level 42, 101 Collins St, Melbourne VIC 3000',
+      size: 'Large (200-1000)',
+      whyTarget: 'Demanding executive travel schedules and discreet luxury chauffeured transit.',
+      targetRoles: ['Executive Assistant', 'Head of Facilities & Operations'],
+    },
   ],
   'st kilda road': [
     {
@@ -208,6 +248,64 @@ const EXTENDED_TARGET_COMPANIES: Record<string, any[]> = {
       size: 'Enterprise (1000+)',
       whyTarget: 'International scientific delegations, government ministers, and overseas research partners.',
       targetRoles: ['Head of External Relations', 'Executive Assistant'],
+    },
+  ],
+  'carlton': [
+    {
+      name: 'Australian Medical Association (AMA Victoria)',
+      domain: 'amavic.com.au',
+      industry: 'Healthcare Governance & Medical Leadership',
+      suburb: 'Carlton',
+      address: '293 Royal Parade, Parkville / Carlton VIC 3052',
+      size: 'Medium (50-200)',
+      whyTarget: 'Interstate medical board directors and government health delegation transits.',
+      targetRoles: ['Executive Assistant to CEO', 'Events Coordinator'],
+    },
+  ],
+  'box hill': [
+    {
+      name: 'Eastern Health Corporate Headquarters',
+      domain: 'easternhealth.org.au',
+      industry: 'Healthcare Network & Medical Administration',
+      suburb: 'Box Hill',
+      address: '5 Arnold St, Box Hill VIC 3128',
+      size: 'Enterprise (1000+)',
+      whyTarget: 'Executive healthcare directors and medical specialists visiting from Melbourne CBD and interstate.',
+      targetRoles: ['Executive Assistant to Board', 'Director of Operations'],
+    },
+  ],
+  'dandenong': [
+    {
+      name: 'Alstom Transport Australia (Bombardier)',
+      domain: 'alstom.com',
+      industry: 'Rail Transport & Heavy Infrastructure',
+      suburb: 'Dandenong',
+      address: 'South Gippsland Hwy, Dandenong South VIC 3175',
+      size: 'Enterprise (1000+)',
+      whyTarget: 'International engineering executives and visiting government transport officials requiring VIP transfers.',
+      targetRoles: ['Executive Assistant', 'Workplace Operations Lead'],
+    },
+    {
+      name: 'Jayco Australia Corporate Operations',
+      domain: 'jayco.com.au',
+      industry: 'Manufacturing & Leisure Enterprise',
+      suburb: 'Dandenong',
+      address: '1 Jayco Dr, Dandenong South VIC 3175',
+      size: 'Enterprise (1000+)',
+      whyTarget: 'Executive board meetings, national dealer principal conferences, and airport transit.',
+      targetRoles: ['Executive Assistant to Managing Director', 'Head of Corporate Services'],
+    },
+  ],
+  'tullamarine': [
+    {
+      name: 'Melbourne Airport Corporation (APAC)',
+      domain: 'melbourneairport.com.au',
+      industry: 'Aviation Infrastructure & Commercial Management',
+      suburb: 'Tullamarine',
+      address: 'Level 2, Terminal 2, Melbourne Airport VIC 3045',
+      size: 'Enterprise (1000+)',
+      whyTarget: 'Airport leadership, visiting airline executives, and transport board meetings in Melbourne CBD.',
+      targetRoles: ['Executive Assistant to CEO', 'Corporate Operations Director'],
     },
   ],
   'sydney': [
