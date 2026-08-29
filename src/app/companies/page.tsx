@@ -290,7 +290,7 @@ export default function CompaniesPage() {
               className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-500/30 text-xs font-bold shadow-md flex items-center gap-2 transition-all"
             >
               <FileSpreadsheet className="w-4 h-4 text-sky-400" />
-              <span>📥 Import Apollo CSV</span>
+              <span>📥 Universal CSV Import</span>
             </button>
 
             <button
@@ -728,22 +728,22 @@ export default function CompaniesPage() {
         </div>
       </Modal>
 
-      {/* CSV Bulk Import Modal */}
+      {/* Universal CSV Bulk Import Modal */}
       <Modal
         isOpen={isCsvModalOpen}
         onClose={() => {
           setIsCsvModalOpen(false);
           setCsvImportResult(null);
         }}
-        title="📥 Bulk Import Apollo.io Leads & Generate AI Outreaches"
-        subtitle="Upload an Apollo.io CSV export or paste CSV text. Claude 3.5 AI will automatically score all companies and generate tailored executive drafts in batch."
+        title="📥 Universal CSV Leads Import & AI Pitch Generator"
+        subtitle="Upload leads exported from Apollo.io, Hunter.io, Snov.io, Anymail Finder, LinkedIn, or custom spreadsheets. AI will score every organization and draft customized role-targeted emails."
         maxWidth="2xl"
       >
         <div className="space-y-4">
           {csvImportResult ? (
             <div className="p-6 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-3">
               <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-              <h3 className="text-base font-bold text-white">Bulk Import & Intelligence Complete!</h3>
+              <h3 className="text-base font-bold text-white">Universal Import & AI Intelligence Complete!</h3>
               <p className="text-xs text-emerald-200">
                 Successfully imported <b>{csvImportResult.importedCount}</b> companies and generated individual personalized outreach drafts.
               </p>
@@ -774,6 +774,16 @@ export default function CompaniesPage() {
             </div>
           ) : (
             <>
+              {/* Supported Platforms Badges */}
+              <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300">
+                <span className="text-slate-400 font-semibold mr-1">Supported Sources:</span>
+                <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">Apollo.io</span>
+                <span className="px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold">Hunter.io</span>
+                <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">Snov.io</span>
+                <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold">Anymail Finder</span>
+                <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold">LinkedIn / Excel</span>
+              </div>
+
               {/* File Upload Zone */}
               <div className="border-2 border-dashed border-slate-700 hover:border-sky-500/60 rounded-2xl p-6 text-center transition-colors bg-slate-950/60">
                 <input
@@ -786,10 +796,10 @@ export default function CompaniesPage() {
                 <label htmlFor="csv-file-input" className="cursor-pointer space-y-2 block">
                   <UploadCloud className="w-8 h-8 text-sky-400 mx-auto" />
                   <div className="text-xs font-bold text-slate-200">
-                    {csvFile ? csvFile.name : 'Click to select or drag & drop an Apollo CSV file'}
+                    {csvFile ? csvFile.name : 'Click to select or drag & drop any CSV file'}
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    Supports exports directly from Apollo.io with Company Name, Website, Title, Email columns.
+                    Auto-detects Company, Website/Domain, Name, Title, and Email across all major enrichment platforms.
                   </div>
                 </label>
               </div>
@@ -810,16 +820,16 @@ export default function CompaniesPage() {
                   rows={4}
                   value={csvText}
                   onChange={(e) => handleCsvTextChange(e.target.value)}
-                  placeholder="Company Name,Website,Industry,First Name,Last Name,Title,Email&#10;Telstra,telstra.com,Telecommunications,Sarah,Jenkins,Head of Operations,sarah.jenkins@telstra.com&#10;BHP,bhp.com,Mining,Marcus,Vance,Corporate Travel Desk,m.vance@bhp.com"
+                  placeholder="Company Name,Website,Industry,First Name,Last Name,Title,Email&#10;Telstra,telstra.com,Telecommunications,Sarah,Jenkins,Head of Operations,sarah.jenkins@telstra.com&#10;BHP,bhp.com,Mining,Marcus,Vance,Corporate Travel Desk,m.vance@bhp.com&#10;Macquarie,macquarie.com,Finance,David,Chen,Executive Assistant,d.chen@macquarie.com"
                   className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-sky-500"
                 />
               </div>
 
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                <div className="font-semibold text-slate-300">💡 Complete 3-Step Flow:</div>
-                <div>1. Click &ldquo;🎯 Melbourne Target Radar&rdquo; and click &ldquo;Copy Domains&rdquo;.</div>
-                <div>2. In Apollo.io web, paste domains and click &ldquo;Export CSV&rdquo;.</div>
-                <div>3. Drop that CSV file here. Claude AI will score all companies and draft emails automatically!</div>
+                <div className="font-semibold text-slate-300">💡 Multi-Platform Workflow:</div>
+                <div>1. Search contacts on <b>Apollo.io</b>, <b>Hunter.io</b>, <b>Snov.io</b>, or <b>Anymail Finder</b>.</div>
+                <div>2. Export CSV and drop the file here.</div>
+                <div>3. The AI engine automatically parses roles (EA, Travel Manager, Operations) and creates tailored pitches!</div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">

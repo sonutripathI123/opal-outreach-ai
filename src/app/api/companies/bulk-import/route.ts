@@ -6,12 +6,42 @@ import { logActivity, createNotification } from '@/lib/activity-logger';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Universal Multi-Platform Field Extractor
+ * Automatically recognizes column headers from Apollo.io, Hunter.io, Snov.io, Anymail Finder, LinkedIn, and generic CSVs
+ */
+function extractValue(item: Record<string, any>, aliases: string[]): string {
+  // 1. Direct match
+  for (const alias of aliases) {
+    if (item[alias] !== undefined && item[alias] !== null && String(item[alias]).trim() !== '') {
+      return String(item[alias]).trim();
+    }
+  }
+
+  // 2. Normalized alphanumeric match
+  const itemKeys = Object.keys(item);
+  for (const alias of aliases) {
+    const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const key of itemKeys) {
+      const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanKey === cleanAlias || cleanKey.includes(cleanAlias)) {
+        const val = item[key];
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          return String(val).trim();
+        }
+      }
+    }
+  }
+
+  return '';
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { rows } = await req.json();
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json({ error: 'Valid rows array is required for bulk import' }, { status: 400 });
+      return NextResponse.json({ error: 'Valid rows array is required for universal bulk import' }, { status: 400 });
     }
 
     const profile = await prisma.businessProfile.findFirst();
@@ -29,26 +59,122 @@ export async function POST(req: NextRequest) {
     let skippedCount = 0;
 
     for (const item of rows) {
-      const companyName = item.companyName || item['Company Name'] || item['Company'] || item.name;
-      const website = item.website || item['Website'] || item['Company Website'] || item.domain || '';
-      const industry = item.industry || item['Industry'] || 'Corporate & Professional Services';
-      const city = item.city || item['City'] || 'Melbourne';
-      const state = item.state || item['State'] || 'VIC';
-      const contactFullName = item.contactName || item['Full Name'] || item['Name'] || `${item['First Name'] || ''} ${item['Last Name'] || ''}`.trim() || 'Executive Travel Coordinator';
-      const contactRole = item.contactRole || item['Title'] || item['Job Title'] || 'Head of Executive Operations & Corporate Travel';
-      const contactEmail = item.contactEmail || item['Email'] || item['Work Email'] || item['Contact Email'] || '';
+      // 1. Extract Company Name (Apollo, Hunter, Snov, Anymail Finder, LinkedIn, Generic)
+      let companyName = extractValue(item, [
+        'company_name',
+        'company',
+        'organization_name',
+        'organization',
+        'companyName',
+        'account_name',
+        'employer',
+        'name',
+        'business_name',
+      ]);
+
+      // 2. Extract Website / Domain
+      let website = extractValue(item, [
+        'website',
+        'domain',
+        'company_website',
+        'company_domain',
+        'url',
+        'web',
+        'homepage',
+        'domain_name',
+      ]);
+
+      // 3. Extract Email (Direct contact email or domain desk)
+      const contactEmail = extractValue(item, [
+        'email',
+        'email_address',
+        'work_email',
+        'corporate_email',
+        'contact_email',
+        'direct_email',
+        'primary_email',
+        'contactEmail',
+        'value',
+      ]);
+
+      // If company name is missing but website/domain/email exists, infer company name
+      if (!companyName && website) {
+        const cleanDomain = website.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+        const brand = cleanDomain.split('.')[0];
+        companyName = brand.charAt(0).toUpperCase() + brand.slice(1);
+      } else if (!companyName && contactEmail && contactEmail.includes('@')) {
+        const domainPart = contactEmail.split('@')[1];
+        const brand = domainPart.split('.')[0];
+        companyName = brand.charAt(0).toUpperCase() + brand.slice(1);
+      }
 
       if (!companyName) {
         skippedCount++;
         continue;
       }
 
+      // Format domain & website cleanly
+      if (!website) {
+        if (contactEmail && contactEmail.includes('@') && !contactEmail.endsWith('gmail.com') && !contactEmail.endsWith('yahoo.com')) {
+          website = `https://${contactEmail.split('@')[1]}`;
+        } else {
+          website = `https://${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com.au`;
+        }
+      }
+
+      const domain = website.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+
+      // 4. Extract Contact Name (Full name or First + Last)
+      let contactFullName = extractValue(item, [
+        'full_name',
+        'name',
+        'contact_name',
+        'person_name',
+        'contactName',
+        'lead_name',
+      ]);
+
+      if (!contactFullName) {
+        const firstName = extractValue(item, ['first_name', 'first', 'firstname', 'given_name']);
+        const lastName = extractValue(item, ['last_name', 'last', 'lastname', 'family_name', 'surname']);
+        if (firstName || lastName) {
+          contactFullName = `${firstName} ${lastName}`.trim();
+        }
+      }
+
+      if (!contactFullName) {
+        contactFullName = 'Executive Travel Coordinator';
+      }
+
+      // 5. Extract Job Title / Role
+      let contactRole = extractValue(item, [
+        'title',
+        'job_title',
+        'position',
+        'role',
+        'designation',
+        'headline',
+        'contactRole',
+        'occupation',
+      ]);
+
+      if (!contactRole) {
+        contactRole = 'Head of Executive Operations & Corporate Travel';
+      }
+
+      // 6. Extract Location / Suburb
+      const city = extractValue(item, ['city', 'location', 'suburb', 'company_city', 'person_city']) || 'Melbourne';
+      const state = extractValue(item, ['state', 'region', 'province', 'company_state']) || 'VIC';
+      const industry = extractValue(item, ['industry', 'sector', 'company_industry', 'category']) || 'Corporate & Professional Services';
+      const size = extractValue(item, ['size', 'company_size', 'employees', 'employee_count', 'number_of_employees']) || 'Medium (50-200)';
+      const linkedinUrl = extractValue(item, ['linkedin_url', 'linkedin', 'person_linkedin_url', 'profile_url', 'person_linkedin']);
+
       // Check duplicate
       const existing = await prisma.company.findFirst({
         where: {
           OR: [
             { name: { equals: companyName } },
-            ...(website ? [{ website: { contains: website.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] } }] : []),
+            { website: { contains: domain } },
           ],
         },
       });
@@ -58,17 +184,15 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const domain = website ? website.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] : `${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com.au`;
-
       // Run Corporate Opportunity Scoring Engine
       const analysis = CorporateIntelligenceEngine.analyzeCompany({
         name: companyName,
-        website: website || `https://${domain}`,
+        website: website.startsWith('http') ? website : `https://${website}`,
         industry,
         city,
         state,
         headquartersAddress: `${city}, ${state}`,
-        approximateSize: item.size || item['Company Size'] || 'Medium (50-200)',
+        approximateSize: size,
         officeCount: 2,
         internationalPresence: true,
       });
@@ -77,13 +201,13 @@ export async function POST(req: NextRequest) {
       const company = await prisma.company.create({
         data: {
           name: companyName,
-          website: website || `https://${domain}`,
+          website: website.startsWith('http') ? website : `https://${website}`,
           domain,
           industry,
           city,
           state,
           headquartersAddress: `${city}, ${state}`,
-          approximateSize: item.size || item['Company Size'] || 'Medium (50-200)',
+          approximateSize: size,
           corporateActivityLevel: 'HIGH',
           executiveTravelLikelihood: 'HIGH',
           eventHostingLikelihood: 'MEDIUM',
@@ -133,10 +257,10 @@ export async function POST(req: NextRequest) {
           department: 'Corporate Travel / Operations',
           seniorityLevel: 'DIRECTOR',
           email: finalEmail,
-          emailSource: contactEmail ? 'APOLLO_CSV_IMPORT' : 'SYNTHESIZED_ROLE',
+          emailSource: contactEmail ? 'UNIVERSAL_CSV_IMPORT' : 'SYNTHESIZED_ROLE',
           emailConfidence: contactEmail ? 0.95 : 0.8,
           verificationStatus: contactEmail ? 'VERIFIED' : 'LIKELY',
-          linkedinUrl: item['LinkedIn Url'] || item.linkedin || '',
+          linkedinUrl,
           isPrimaryContact: true,
         },
       });
@@ -183,15 +307,15 @@ export async function POST(req: NextRequest) {
       action: 'DISCOVERY',
       entityType: 'COMPANY',
       actor: 'ADMIN_USER',
-      description: `Bulk imported and scored ${importedCount} corporate organizations with AI outreach drafts generated.`,
+      description: `Universal bulk imported and scored ${importedCount} corporate organizations with AI outreach drafts generated.`,
       details: { importedCount, skippedCount },
     });
 
     if (importedCount > 0) {
       await createNotification({
         type: 'JOB_COMPLETED',
-        title: `Bulk Import Complete: ${importedCount} Companies Added`,
-        message: `${importedCount} companies and decision-makers were imported and queued in the Review Queue.`,
+        title: `Universal CSV Import Complete: ${importedCount} Companies Added`,
+        message: `${importedCount} companies and decision-makers were imported from CSV and queued in the Review Queue.`,
         linkUrl: '/review',
       });
     }
@@ -204,6 +328,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error during bulk import:', error);
-    return NextResponse.json({ error: error.message || 'Failed to process bulk import' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to process universal bulk import' }, { status: 500 });
   }
 }
