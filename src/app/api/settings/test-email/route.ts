@@ -7,23 +7,40 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { host, port, user, pass, fromEmail, fromName, testRecipient } = body;
+    const { providerType, brevoApiKey, resendApiKey, host, port, user, pass, fromEmail, fromName, testRecipient } = body;
 
-    if (!host || !user || !pass || !testRecipient) {
+    if (!testRecipient) {
       return NextResponse.json(
-        { success: false, error: 'Host, Username, Password/App Password, and Test Recipient are required.' },
+        { success: false, error: 'Test Recipient email is required.' },
+        { status: 400 }
+      );
+    }
+
+    if (providerType === 'BREVO_API' && !brevoApiKey) {
+      return NextResponse.json(
+        { success: false, error: 'Brevo API Key is required when using Brevo REST API.' },
+        { status: 400 }
+      );
+    }
+
+    if (providerType === 'SMTP' && (!host || !user || !pass)) {
+      return NextResponse.json(
+        { success: false, error: 'Host, Username, and Password are required for SMTP.' },
         { status: 400 }
       );
     }
 
     const config: SmtpConfig = {
-      host: host.trim(),
+      providerType: providerType || (brevoApiKey ? 'BREVO_API' : 'SMTP'),
+      brevoApiKey: brevoApiKey?.trim(),
+      resendApiKey: resendApiKey?.trim(),
+      host: host ? host.trim() : 'smtp.gmail.com',
       port: Number(port) || 465,
       secure: Number(port) === 465,
-      user: user.trim(),
-      pass: pass.trim(),
+      user: user ? user.trim() : '',
+      pass: pass ? pass.trim() : '',
       fromEmail: (fromEmail || 'book@opalchauffeurs.com.au').trim(),
-      fromName: (fromName || 'Opal Chauffeurs Corporate Team').trim(),
+      fromName: (fromName || 'Inaya | Opal Chauffeurs').trim(),
     };
 
     const result = await EmailDispatcher.testConnection(config, testRecipient.trim());
@@ -33,13 +50,13 @@ export async function POST(req: NextRequest) {
         action: 'EMAIL_SENT',
         entityType: 'SETTING',
         actor: 'ADMIN_USER',
-        description: `Tested SMTP delivery configuration via ${config.host} for ${config.fromEmail}. Verification email sent to ${testRecipient}.`,
+        description: `Tested email dispatch configuration (${config.providerType}) for ${config.fromEmail}. Verification email sent to ${testRecipient}.`,
       });
     }
 
     return NextResponse.json(result);
   } catch (error: any) {
-    console.error('Error testing SMTP connection:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Internal error testing SMTP' }, { status: 500 });
+    console.error('Error testing email connection:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Internal error testing email dispatch' }, { status: 500 });
   }
 }

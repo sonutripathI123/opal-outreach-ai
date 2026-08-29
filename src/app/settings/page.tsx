@@ -41,13 +41,15 @@ export default function SettingsPage() {
   const [testingAi, setTestingAi] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; claudeResponse?: string } | null>(null);
 
-  // SMTP Configuration State
+  // Email Dispatch Engine Configuration State (Brevo REST API & SMTP)
+  const [providerType, setProviderType] = useState<'BREVO_API' | 'SMTP'>('BREVO_API');
+  const [brevoApiKey, setBrevoApiKey] = useState('');
   const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
   const [smtpPort, setSmtpPort] = useState(465);
-  const [smtpUser, setSmtpUser] = useState('book@opalchauffeurs.com.au');
+  const [smtpUser, setSmtpUser] = useState('sonundmitteamb@gmail.com');
   const [smtpPass, setSmtpPass] = useState('');
   const [smtpFromEmail, setSmtpFromEmail] = useState('book@opalchauffeurs.com.au');
-  const [smtpFromName, setSmtpFromName] = useState('Opal Chauffeurs Corporate Team');
+  const [smtpFromName, setSmtpFromName] = useState('Inaya | Opal Chauffeurs');
   const [testEmailRecipient, setTestEmailRecipient] = useState('sonutripathi9305@gmail.com');
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -116,6 +118,8 @@ export default function SettingsPage() {
         if (smtpSetting?.value) {
           try {
             const parsed = JSON.parse(smtpSetting.value);
+            if (parsed.providerType) setProviderType(parsed.providerType);
+            if (parsed.brevoApiKey) setBrevoApiKey(parsed.brevoApiKey);
             if (parsed.host) setSmtpHost(parsed.host);
             if (parsed.port) setSmtpPort(Number(parsed.port));
             if (parsed.user) setSmtpUser(parsed.user);
@@ -213,6 +217,8 @@ export default function SettingsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          providerType,
+          brevoApiKey: brevoApiKey.trim(),
           host: smtpHost,
           port: smtpPort,
           user: smtpUser,
@@ -346,6 +352,8 @@ export default function SettingsPage() {
           body: JSON.stringify({
             key: 'smtp_config',
             value: {
+              providerType,
+              brevoApiKey: brevoApiKey.trim(),
               host: smtpHost.trim(),
               port: Number(smtpPort),
               secure: Number(smtpPort) === 465,
@@ -355,7 +363,7 @@ export default function SettingsPage() {
               fromName: smtpFromName.trim(),
             },
             category: 'EMAIL_CONFIG',
-            description: 'Outgoing SMTP Configuration',
+            description: 'Outgoing Email Dispatch Configuration (Brevo REST API & SMTP)',
           }),
         }),
         fetch('/api/settings', {
@@ -529,22 +537,48 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* SECTION 2: Outgoing Real Email Dispatch (Google Workspace SMTP / book@opalchauffeurs.com.au) */}
+        {/* SECTION 2: Outgoing Real Email Dispatch (Brevo Cloud REST API & SMTP) */}
         <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800">
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
                 <Mail className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
-                  Official Outgoing Email Dispatch (Google Workspace / SMTP)
+                  Official Outgoing Email Dispatch Engine
                 </h2>
-                <Badge variant="emerald" size="sm">
-                  book@opalchauffeurs.com.au
+                <Badge variant={providerType === 'BREVO_API' ? 'emerald' : 'gold'} size="sm">
+                  {providerType === 'BREVO_API' ? 'Brevo REST API (Render 100% Unblocked)' : 'SMTP Mode'}
                 </Badge>
               </div>
               <p className="text-[11px] text-slate-400">
                 All approved emails will be dispatched through your verified business account with real inbox delivery tracking.
               </p>
+            </div>
+
+            {/* Mode Selector Tabs */}
+            <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-950 border border-slate-800 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setProviderType('BREVO_API')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  providerType === 'BREVO_API'
+                    ? 'bg-emerald-500 text-slate-950 shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🚀 Brevo API (Cloud 100% Free)
+              </button>
+              <button
+                type="button"
+                onClick={() => setProviderType('SMTP')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  providerType === 'SMTP'
+                    ? 'bg-amber-500 text-slate-950 shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                ✉️ Standard SMTP
+              </button>
             </div>
           </div>
 
@@ -566,63 +600,120 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">SMTP Host</label>
-              <input
-                type="text"
-                value={smtpHost}
-                onChange={(e) => setSmtpHost(e.target.value)}
-                placeholder="smtp.gmail.com"
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
-              />
-            </div>
+          {/* Option A: Brevo Cloud REST API (100% Unblocked on Render) */}
+          {providerType === 'BREVO_API' ? (
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200 space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-emerald-300">
+                  <span>✨ Why Brevo API?</span>
+                </div>
+                <p className="text-[11px] text-emerald-200/90 leading-relaxed">
+                  Render Free Cloud restricts direct SMTP ports (465/587). Brevo sends emails over <b>HTTPS Port 443 REST API</b>, which is <b>100% allowed on Render with zero port blocks</b>. Free tier includes <b>300 emails/day (9,000 emails/month)</b> forever!
+                </p>
+                <div className="text-[11px] pt-1">
+                  👉 <b>Get your free Brevo API key in 1 minute:</b> Sign up at <a href="https://app.brevo.com/settings/keys/api" target="_blank" rel="noreferrer" className="underline font-bold text-amber-300 hover:text-amber-200">https://app.brevo.com/settings/keys/api</a> → Click &ldquo;Generate a new API key&rdquo; → Paste below!
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Port (465 SSL / 587 TLS)</label>
-              <input
-                type="number"
-                value={smtpPort}
-                onChange={(e) => setSmtpPort(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
-              />
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Brevo API Key (Master Key)
+                  </label>
+                  <input
+                    type="password"
+                    value={brevoApiKey}
+                    onChange={(e) => setBrevoApiKey(e.target.value)}
+                    placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 font-mono focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Sender Email</label>
-              <input
-                type="email"
-                value={smtpFromEmail}
-                onChange={(e) => setSmtpFromEmail(e.target.value)}
-                placeholder="book@opalchauffeurs.com.au"
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
-              />
-            </div>
-          </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Sender Email</label>
+                  <input
+                    type="email"
+                    value={smtpFromEmail}
+                    onChange={(e) => setSmtpFromEmail(e.target.value)}
+                    placeholder="sonundmitteamb@gmail.com"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">SMTP Username / Login Email</label>
-              <input
-                type="text"
-                value={smtpUser}
-                onChange={(e) => setSmtpUser(e.target.value)}
-                placeholder="book@opalchauffeurs.com.au"
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
-              />
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Sender Display Name</label>
+                <input
+                  type="text"
+                  value={smtpFromName}
+                  onChange={(e) => setSmtpFromName(e.target.value)}
+                  placeholder="Inaya | Opal Chauffeurs"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
             </div>
+          ) : (
+            /* Option B: Standard SMTP */
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">SMTP Host</label>
+                  <input
+                    type="text"
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    placeholder="smtp.gmail.com"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Google App Password / SMTP Password</label>
-              <input
-                type="password"
-                value={smtpPass}
-                onChange={(e) => setSmtpPass(e.target.value)}
-                placeholder="16-digit Google App Password (e.g. abcd efgh ijkl mnop)"
-                className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
-              />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Port (465 SSL / 587 TLS)</label>
+                  <input
+                    type="number"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Sender Email</label>
+                  <input
+                    type="email"
+                    value={smtpFromEmail}
+                    onChange={(e) => setSmtpFromEmail(e.target.value)}
+                    placeholder="book@opalchauffeurs.com.au"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">SMTP Username / Login Email</label>
+                  <input
+                    type="text"
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    placeholder="sonundmitteamb@gmail.com"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Google App Password / SMTP Password</label>
+                  <input
+                    type="password"
+                    value={smtpPass}
+                    onChange={(e) => setSmtpPass(e.target.value)}
+                    placeholder="16-digit Google App Password"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Test Live Send Box */}
           <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">

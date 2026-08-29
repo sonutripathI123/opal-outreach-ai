@@ -32,16 +32,108 @@ export interface EmailSendOptions {
 }
 
 export interface SmtpConfig {
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  pass: string;
+  providerType?: 'BREVO_API' | 'RESEND_API' | 'SMTP';
+  brevoApiKey?: string;
+  resendApiKey?: string;
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user?: string;
+  pass?: string;
   fromEmail: string;
   fromName: string;
 }
 
 export class EmailDispatcher {
+  /**
+   * Dispatches via Brevo (Sendinblue) HTTP REST API over standard HTTPS Port 443
+   * 100% Guaranteed Unblocked on Render Cloud (300 Free Emails / Day)
+   */
+  static async sendViaBrevo(apiKey: string, config: SmtpConfig, options: EmailSendOptions) {
+    const fromEmail = (config.fromEmail || 'book@opalchauffeurs.com.au').trim();
+    const fromName = (config.fromName || 'Inaya | Opal Chauffeurs').trim();
+
+    const payload = {
+      sender: {
+        name: fromName,
+        email: fromEmail,
+      },
+      to: [
+        {
+          email: options.to.trim(),
+          name: options.toName ? options.toName.trim() : options.to.trim(),
+        },
+      ],
+      replyTo: {
+        email: options.replyTo || fromEmail,
+        name: fromName,
+      },
+      subject: options.subject,
+      htmlContent: options.html || options.text.replace(/\n/g, '<br/>'),
+      textContent: options.text,
+    };
+
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': apiKey.trim(),
+        'Content-Type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `Brevo HTTP Error ${res.status}`);
+    }
+
+    return {
+      success: true,
+      mode: 'BREVO_REST_API' as const,
+      messageId: data.messageId || `brevo-${Date.now()}`,
+    };
+  }
+
+  /**
+   * Dispatches via Resend HTTP REST API over standard HTTPS Port 443
+   */
+  static async sendViaResend(apiKey: string, config: SmtpConfig, options: EmailSendOptions) {
+    const fromEmail = (config.fromEmail || 'book@opalchauffeurs.com.au').trim();
+    const fromName = (config.fromName || 'Inaya | Opal Chauffeurs').trim();
+
+    const payload = {
+      from: `${fromName} <${fromEmail}>`,
+      to: [options.to.trim()],
+      reply_to: options.replyTo || fromEmail,
+      subject: options.subject,
+      html: options.html || options.text.replace(/\n/g, '<br/>'),
+      text: options.text,
+    };
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `Resend HTTP Error ${res.status}`);
+    }
+
+    return {
+      success: true,
+      mode: 'RESEND_REST_API' as const,
+      messageId: data.id || `resend-${Date.now()}`,
+    };
+  }
+
   /**
    * Creates an optimized Nodemailer transporter with custom IPv4 lookup & auto space-stripping
    */
@@ -77,7 +169,7 @@ export class EmailDispatcher {
   }
 
   /**
-   * Retrieves active SMTP configuration from database or env variables
+   * Retrieves active email configuration from database or env variables
    */
   static async getSmtpConfig(): Promise<SmtpConfig | null> {
     try {
@@ -87,15 +179,18 @@ export class EmailDispatcher {
 
       if (setting?.value) {
         const parsed = JSON.parse(setting.value);
-        if (parsed.host && parsed.user && parsed.pass) {
+        if (parsed.brevoApiKey || parsed.resendApiKey || (parsed.host && parsed.user && parsed.pass)) {
           return {
+            providerType: parsed.providerType || (parsed.brevoApiKey ? 'BREVO_API' : parsed.resendApiKey ? 'RESEND_API' : 'SMTP'),
+            brevoApiKey: parsed.brevoApiKey,
+            resendApiKey: parsed.resendApiKey,
             host: parsed.host,
             port: Number(parsed.port) || 465,
             secure: parsed.secure !== undefined ? Boolean(parsed.secure) : (Number(parsed.port) === 465),
             user: parsed.user,
             pass: parsed.pass,
             fromEmail: parsed.fromEmail || 'book@opalchauffeurs.com.au',
-            fromName: parsed.fromName || 'Opal Chauffeurs Corporate Team',
+            fromName: parsed.fromName || 'Inaya | Opal Chauffeurs',
           };
         }
       }
@@ -104,16 +199,26 @@ export class EmailDispatcher {
     }
 
     // Fallback to process.env
+    if (process.env.BREVO_API_KEY) {
+      return {
+        providerType: 'BREVO_API',
+        brevoApiKey: process.env.BREVO_API_KEY,
+        fromEmail: process.env.SMTP_FROM || 'book@opalchauffeurs.com.au',
+        fromName: process.env.SMTP_FROM_NAME || 'Inaya | Opal Chauffeurs',
+      };
+    }
+
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
       const port = Number(process.env.SMTP_PORT) || 465;
       return {
+        providerType: 'SMTP',
         host: process.env.SMTP_HOST,
         port,
         secure: port === 465,
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
         fromEmail: process.env.SMTP_FROM || 'book@opalchauffeurs.com.au',
-        fromName: process.env.SMTP_FROM_NAME || 'Opal Chauffeurs Corporate Team',
+        fromName: process.env.SMTP_FROM_NAME || 'Inaya | Opal Chauffeurs',
       };
     }
 
@@ -121,18 +226,18 @@ export class EmailDispatcher {
   }
 
   /**
-   * Dispatches an email via configured SMTP with instant IPv4 connection & auto port 587 fallback
+   * Dispatches an email via configured engine (Brevo REST API / Resend / Dual-Port SMTP)
    */
   static async sendEmail(options: EmailSendOptions): Promise<{
     success: boolean;
     messageId?: string;
-    mode: 'REAL_SMTP' | 'SIMULATED_SAFE';
+    mode: 'BREVO_REST_API' | 'RESEND_REST_API' | 'REAL_SMTP' | 'SIMULATED_SAFE';
     error?: string;
   }> {
     const config = await this.getSmtpConfig();
 
     if (!config) {
-      console.log(`[SIMULATED DISPATCH] No SMTP credentials configured. Recorded email to: ${options.to}`);
+      console.log(`[SIMULATED DISPATCH] No email credentials configured. Recorded email to: ${options.to}`);
       return {
         success: true,
         mode: 'SIMULATED_SAFE',
@@ -140,10 +245,38 @@ export class EmailDispatcher {
       };
     }
 
+    // 1. Priority A: Brevo HTTP REST API (100% Unblocked on Render Cloud)
+    if (config.providerType === 'BREVO_API' && config.brevoApiKey) {
+      try {
+        return await this.sendViaBrevo(config.brevoApiKey, config, options);
+      } catch (err: any) {
+        console.error('Brevo API Dispatch Error:', err);
+        return {
+          success: false,
+          mode: 'BREVO_REST_API',
+          error: `Brevo API Error: ${err.message || 'Transmission failed'}`,
+        };
+      }
+    }
+
+    // 2. Priority B: Resend HTTP REST API
+    if (config.providerType === 'RESEND_API' && config.resendApiKey) {
+      try {
+        return await this.sendViaResend(config.resendApiKey, config, options);
+      } catch (err: any) {
+        console.error('Resend API Dispatch Error:', err);
+        return {
+          success: false,
+          mode: 'RESEND_REST_API',
+          error: `Resend API Error: ${err.message || 'Transmission failed'}`,
+        };
+      }
+    }
+
+    // 3. Priority C: Standard SMTP with Dual-Port Fallback (Port 465 & Port 587)
     const formattedFrom = `"${config.fromName}" <${config.fromEmail}>`;
     const formattedTo = options.toName ? `"${options.toName}" <${options.to}>` : options.to;
 
-    // 1. Try Primary Port (465 SSL)
     try {
       const transporter = this.createTransporter(config);
       const result = await transporter.sendMail({
@@ -163,7 +296,6 @@ export class EmailDispatcher {
     } catch (primaryErr: any) {
       console.warn('Port 465 attempt failed, trying Port 587 fallback:', primaryErr.message);
 
-      // 2. Automatic Fallback to Port 587 (TLS/STARTTLS)
       try {
         const fallbackConfig: SmtpConfig = { ...config, port: 587, secure: false };
         const fallbackTransporter = this.createTransporter(fallbackConfig);
@@ -193,13 +325,53 @@ export class EmailDispatcher {
   }
 
   /**
-   * Verifies SMTP connection and sends a test email with automatic port 587 fallback
+   * Verifies email connection and sends a test email
    */
   static async testConnection(
     config: SmtpConfig,
     testRecipient: string
   ): Promise<{ success: boolean; message: string; messageId?: string }> {
-    // 1. Try Primary Port
+    const testOptions: EmailSendOptions = {
+      to: testRecipient.trim(),
+      subject: '✨ Opal Outreach AI - Real Email Delivery Test Successful',
+      text: `Hello,\n\nThis is a verification test from Opal Outreach AI.\n\nYour outgoing email configuration for ${config.fromEmail} is 100% operational!\n\nWarm regards,\nInaya\nOpal Chauffeurs Intelligence Team`,
+    };
+
+    // Brevo API Test
+    if (config.providerType === 'BREVO_API' && config.brevoApiKey) {
+      try {
+        const result = await this.sendViaBrevo(config.brevoApiKey, config, testOptions);
+        return {
+          success: true,
+          message: `✨ Brevo REST API test email dispatched successfully to ${testRecipient}! (Render 100% Unblocked)`,
+          messageId: result.messageId,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: `Brevo API Error: ${err.message || 'Failed to authenticate API key or sender email'}`,
+        };
+      }
+    }
+
+    // Resend API Test
+    if (config.providerType === 'RESEND_API' && config.resendApiKey) {
+      try {
+        const result = await this.sendViaResend(config.resendApiKey, config, testOptions);
+        return {
+          success: true,
+          message: `✨ Resend REST API test email dispatched successfully to ${testRecipient}!`,
+          messageId: result.messageId,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: `Resend API Error: ${err.message || 'Failed to send'}`,
+        };
+      }
+    }
+
+    // SMTP Test
     try {
       const transporter = this.createTransporter(config);
       await transporter.verify();
@@ -207,8 +379,8 @@ export class EmailDispatcher {
       const testResult = await transporter.sendMail({
         from: `"${config.fromName}" <${config.fromEmail}>`,
         to: testRecipient,
-        subject: '✨ Opal Outreach AI - Real Email Delivery Test Successful',
-        text: `Hello,\n\nThis is a verification test from Opal Outreach AI.\n\nYour outgoing email configuration for ${config.fromEmail} is 100% operational!\n\nWarm regards,\nInaya\nOpal Chauffeurs Intelligence Team`,
+        subject: testOptions.subject,
+        text: testOptions.text,
       });
 
       return {
@@ -217,9 +389,6 @@ export class EmailDispatcher {
         messageId: testResult.messageId,
       };
     } catch (primaryErr: any) {
-      console.warn('Test on port 465 failed, trying port 587 fallback:', primaryErr.message);
-
-      // 2. Fallback to Port 587
       try {
         const fallbackConfig: SmtpConfig = { ...config, port: 587, secure: false };
         const fallbackTransporter = this.createTransporter(fallbackConfig);
@@ -228,8 +397,8 @@ export class EmailDispatcher {
         const testResult = await fallbackTransporter.sendMail({
           from: `"${config.fromName}" <${config.fromEmail}>`,
           to: testRecipient,
-          subject: '✨ Opal Outreach AI - Real Email Delivery Test Successful (Port 587)',
-          text: `Hello,\n\nThis is a verification test from Opal Outreach AI.\n\nYour outgoing email configuration for ${config.fromEmail} (Port 587) is 100% operational!\n\nWarm regards,\nInaya\nOpal Chauffeurs Intelligence Team`,
+          subject: testOptions.subject,
+          text: testOptions.text,
         });
 
         return {
