@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       website: 'https://www.opalchauffeurs.com.au/',
       description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
       brandPositioning: 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-      emailSignature: `Warm regards,\nCorporate Partnerships Team\nOpal Chauffeurs (Esteem Travel Service Pty Ltd)\nWeb: https://www.opalchauffeurs.com.au/`,
+      emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
       collaborationOffer: 'Introducing Opal Chauffeurs as your corporate transport partner.',
     };
 
