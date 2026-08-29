@@ -20,17 +20,33 @@ import {
   Sparkles,
   AlertCircle,
   XCircle,
+  RotateCw,
+  Plus,
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SentPage() {
   const [sentEmails, setSentEmails] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [filterTab, setFilterTab] = useState<'ALL' | 'REPLIED' | 'AWAITING' | 'FOLLOWUP'>('ALL');
   const [selectedSent, setSelectedSent] = useState<any>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [activeTabInModal, setActiveTabInModal] = useState<'INITIAL' | 'FOLLOWUPS' | 'REPLY'>('INITIAL');
+
+  // Direct Reply Modal State
+  const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
+  const [activeReply, setActiveReply] = useState<any>(null);
+  const [replyResponseText, setReplyResponseText] = useState('');
+  const [sendingResponse, setSendingResponse] = useState(false);
+  const [responseSuccessMsg, setResponseSuccessMsg] = useState<string | null>(null);
+
+  // Ingest Reply Modal State
+  const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
+  const [targetSentForIngest, setTargetSentForIngest] = useState<any>(null);
+  const [ingestBodyText, setIngestBodyText] = useState('Ok, please share corporate rates and booking procedure.');
+  const [ingesting, setIngesting] = useState(false);
 
   const fetchSent = async () => {
     try {
@@ -43,6 +59,7 @@ export default function SentPage() {
       console.error(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -50,10 +67,94 @@ export default function SentPage() {
     fetchSent();
   }, []);
 
+  const handleManualRefresh = () => {
+    setRefreshing(true);
+    fetchSent();
+  };
+
   const openViewer = (sent: any) => {
     setSelectedSent(sent);
-    setActiveTabInModal(sent.hasReply ? 'REPLY' : 'INITIAL');
+    setActiveTabInModal(sent.hasReply || sent.replies?.length > 0 ? 'REPLY' : 'INITIAL');
     setIsViewerOpen(true);
+  };
+
+  const openReplyModal = (sent: any, reply: any) => {
+    setSelectedSent(sent);
+    setActiveReply(reply);
+    setReplyResponseText(reply.aiDraftedReply || '');
+    setResponseSuccessMsg(null);
+    setIsReplyModalOpen(true);
+  };
+
+  const openIngestModal = (sent: any) => {
+    setTargetSentForIngest(sent);
+    setIngestBodyText('Ok, please share corporate rate card and booking procedure.');
+    setIsIngestModalOpen(true);
+  };
+
+  const handleIngestReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetSentForIngest || !ingestBodyText.trim()) return;
+
+    setIngesting(true);
+    try {
+      const res = await fetch('/api/replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sentEmailId: targetSentForIngest.id,
+          senderEmail: targetSentForIngest.recipientEmail,
+          prospectName: targetSentForIngest.recipientName,
+          companyName: targetSentForIngest.company?.name || targetSentForIngest.event?.name,
+          subject: `Re: ${targetSentForIngest.subject}`,
+          bodyText: ingestBodyText.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsIngestModalOpen(false);
+        fetchSent();
+        // Immediately open the response modal for 1-click send
+        if (data.reply) {
+          openReplyModal(targetSentForIngest, data.reply);
+        }
+      } else {
+        alert(data.error || 'Failed to ingest reply');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error ingesting reply');
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+  const handleSendResponse = async () => {
+    if (!activeReply) return;
+    setSendingResponse(true);
+    setResponseSuccessMsg(null);
+    try {
+      const res = await fetch(`/api/replies/${activeReply.id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responseText: replyResponseText }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setResponseSuccessMsg(`✨ Response dispatched successfully to ${activeReply.senderEmail}!`);
+        fetchSent();
+        setTimeout(() => {
+          setIsReplyModalOpen(false);
+        }, 2000);
+      } else {
+        alert(data.error || 'Failed to dispatch reply');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error sending reply');
+    } finally {
+      setSendingResponse(false);
+    }
   };
 
   // Filter logic
@@ -95,28 +196,39 @@ export default function SentPage() {
             </div>
             <h1 className="text-2xl font-black text-white">Sent Outreach & Live Reply Tracker</h1>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              Complete real-time tracking of every dispatched email, live client reply status (Replied vs Awaiting), automated follow-up progress, and immutable audit logs.
+              Complete real-time tracking of every dispatched email, live client reply status (Replied vs Awaiting), automated follow-up progress, and 1-click AI reply generator.
             </p>
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="px-3.5 py-2 rounded-2xl bg-slate-950 border border-slate-800 text-center min-w-[85px]">
-              <div className="text-lg font-black text-slate-100">{totalSent}</div>
-              <div className="text-[10px] text-slate-400 font-semibold uppercase">Total Sent</div>
+          {/* Quick Metrics & Refresh Button */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="px-3 py-2 rounded-2xl bg-slate-950 border border-slate-800 text-center min-w-[75px]">
+                <div className="text-base font-black text-slate-100">{totalSent}</div>
+                <div className="text-[9px] text-slate-400 font-semibold uppercase">Total Sent</div>
+              </div>
+              <div className="px-3 py-2 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center min-w-[75px]">
+                <div className="text-base font-black text-emerald-400">{totalReplied}</div>
+                <div className="text-[9px] text-emerald-300 font-semibold uppercase">Replied</div>
+              </div>
+              <div className="px-3 py-2 rounded-2xl bg-slate-950 border border-amber-500/30 text-center min-w-[75px]">
+                <div className="text-base font-black text-amber-400">{totalAwaiting}</div>
+                <div className="text-[9px] text-amber-300 font-semibold uppercase">Awaiting</div>
+              </div>
+              <div className="px-3 py-2 rounded-2xl bg-slate-950 border border-sky-500/30 text-center min-w-[75px]">
+                <div className="text-base font-black text-sky-400">{totalFollowupsActive}</div>
+                <div className="text-[9px] text-sky-300 font-semibold uppercase">Follow-up</div>
+              </div>
             </div>
-            <div className="px-3.5 py-2 rounded-2xl bg-slate-950 border border-emerald-500/30 text-center min-w-[85px]">
-              <div className="text-lg font-black text-emerald-400">{totalReplied}</div>
-              <div className="text-[10px] text-emerald-300 font-semibold uppercase">Replied</div>
-            </div>
-            <div className="px-3.5 py-2 rounded-2xl bg-slate-950 border border-amber-500/30 text-center min-w-[85px]">
-              <div className="text-lg font-black text-amber-400">{totalAwaiting}</div>
-              <div className="text-[10px] text-amber-300 font-semibold uppercase">Awaiting</div>
-            </div>
-            <div className="px-3.5 py-2 rounded-2xl bg-slate-950 border border-sky-500/30 text-center min-w-[85px]">
-              <div className="text-lg font-black text-sky-400">{totalFollowupsActive}</div>
-              <div className="text-[10px] text-sky-300 font-semibold uppercase">Follow-up In Plan</div>
-            </div>
+
+            <button
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center justify-center gap-1.5 transition-all self-stretch sm:self-auto disabled:opacity-50"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-400' : 'text-slate-400'}`} />
+              <span>{refreshing ? 'Syncing...' : 'Sync Ledger'}</span>
+            </button>
           </div>
         </div>
 
@@ -192,97 +304,128 @@ export default function SentPage() {
               return (
                 <div
                   key={sent.id}
-                  className={`p-5 rounded-2xl bg-slate-900/90 border transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-5 ${
+                  className={`p-5 rounded-2xl bg-slate-900/90 border transition-all flex flex-col justify-between gap-4 ${
                     hasReplies
-                      ? 'border-emerald-500/50 shadow-lg shadow-emerald-950/20'
+                      ? 'border-emerald-500/60 shadow-lg shadow-emerald-950/30'
                       : 'border-slate-800 hover:border-slate-700'
                   }`}
                 >
-                  <div className="space-y-2 flex-1">
-                    {/* Top Row: Entity + Badges */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-base font-bold text-slate-100">{entityName}</span>
-                      
-                      {/* Reply Status Badge */}
-                      {hasReplies ? (
-                        <Badge variant="emerald" size="sm">
-                          🟢 REPLIED ({latestReply?.aiClassification?.replace(/_/g, ' ') || 'INTERESTED'})
-                        </Badge>
-                      ) : (
-                        <Badge variant="amber" size="sm">
-                          ⏳ AWAITING REPLY
-                        </Badge>
-                      )}
-
-                      {/* Delivery Status */}
-                      <Badge variant="slate" size="sm">
-                        {sent.deliveryStatus}
-                      </Badge>
-                    </div>
-
-                    {/* Meta Row */}
-                    <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
-                      <span>To: <b className="text-slate-200">{sent.recipientName}</b></span>
-                      <span>•</span>
-                      <span className="font-mono text-slate-300">{sent.recipientEmail}</span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1 text-slate-300">
-                        <Clock className="w-3.5 h-3.5 text-amber-400" />
-                        Sent: {new Date(sent.sentAt).toLocaleString('en-AU')}
-                      </span>
-                    </div>
-
-                    {/* Subject */}
-                    <div className="text-xs text-slate-200 font-medium">
-                      <span className="text-slate-400">Subject: </span>{sent.subject}
-                    </div>
-
-                    {/* Follow-up / Reply Status Summary Strip */}
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-xs flex flex-wrap items-center justify-between gap-3">
-                      {/* Follow-up info */}
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                        <span className="text-slate-400">Follow-up Cadence:</span>
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-1.5 flex-1">
+                      {/* Top Row: Entity + Badges */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-base font-bold text-slate-100">{entityName}</span>
+                        
+                        {/* Reply Status Badge */}
                         {hasReplies ? (
-                          <span className="text-emerald-400 font-semibold">
-                            ✓ Auto-Halted (Reply Received)
-                          </span>
-                        ) : scheduledFollowup ? (
-                          <span className="text-amber-300 font-medium">
-                            Step {scheduledFollowup.stepNumber} Scheduled for {new Date(scheduledFollowup.scheduledDate).toLocaleDateString('en-AU')}
-                          </span>
-                        ) : sentFollowup ? (
-                          <span className="text-sky-300 font-medium">
-                            Step {sentFollowup.stepNumber} Sent on {new Date(sentFollowup.sentAt || sentFollowup.updatedAt).toLocaleDateString('en-AU')}
-                          </span>
+                          <Badge variant="emerald" size="sm">
+                            🟢 REPLIED ({latestReply?.aiClassification?.replace(/_/g, ' ') || 'INTERESTED'})
+                          </Badge>
                         ) : (
-                          <span className="text-slate-500">None Scheduled</span>
+                          <Badge variant="amber" size="sm">
+                            ⏳ AWAITING REPLY
+                          </Badge>
                         )}
+
+                        {/* Delivery Status */}
+                        <Badge variant="slate" size="sm">
+                          {sent.deliveryStatus}
+                        </Badge>
                       </div>
 
-                      {/* Reply link if replied */}
-                      {hasReplies && (
-                        <Link
-                          href="/inbox"
-                          className="text-emerald-400 hover:text-emerald-300 font-bold inline-flex items-center gap-1 text-[11px]"
+                      {/* Meta Row */}
+                      <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
+                        <span>To: <b className="text-slate-200">{sent.recipientName}</b></span>
+                        <span>•</span>
+                        <span className="font-mono text-slate-300">{sent.recipientEmail}</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-slate-300">
+                          <Clock className="w-3.5 h-3.5 text-amber-400" />
+                          Sent: {new Date(sent.sentAt).toLocaleString('en-AU')}
+                        </span>
+                      </div>
+
+                      {/* Subject */}
+                      <div className="text-xs text-slate-200 font-medium">
+                        <span className="text-slate-400">Subject: </span>{sent.subject}
+                      </div>
+                    </div>
+
+                    {/* Actions on Card */}
+                    <div className="flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0">
+                      {hasReplies ? (
+                        <button
+                          onClick={() => openReplyModal(sent, latestReply)}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all"
                         >
-                          <span>View in AI Inbox</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </Link>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>⚡ View & Send AI Response</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openIngestModal(sent)}
+                          className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+                        >
+                          <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>📥 Ingest / Sync Reply</span>
+                        </button>
                       )}
+
+                      <button
+                        onClick={() => openViewer(sent)}
+                        className="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-semibold transition-colors flex items-center gap-1.5 shadow"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Audit History</span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
-                    <button
-                      onClick={() => openViewer(sent)}
-                      className="px-4 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-bold transition-colors flex items-center gap-2 shadow"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                      <span>View Full History & Audit</span>
-                    </button>
-                  </div>
+                  {/* If Replied: Inline Reply Summary Box */}
+                  {hasReplies && latestReply && (
+                    <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Inbound Client Reply ({new Date(latestReply.receivedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })})</span>
+                        </div>
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-900/50 text-emerald-200 border border-emerald-500/30">
+                          {latestReply.aiClassification}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-200 italic bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
+                        &ldquo;{latestReply.bodyText}&rdquo;
+                      </p>
+                      <div className="text-[11px] text-emerald-200/90 flex flex-wrap items-center justify-between gap-2">
+                        <span><b>AI Intent:</b> {latestReply.aiDetectedIntent || 'Inquiring about corporate transport rates'}</span>
+                        <button
+                          onClick={() => openReplyModal(sent, latestReply)}
+                          className="text-amber-400 hover:text-amber-300 font-bold underline text-xs"
+                        >
+                          Draft & Send Response →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Follow-up info strip */}
+                  {!hasReplies && (
+                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-xs flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <span className="text-slate-400">Follow-up Cadence:</span>
+                      {scheduledFollowup ? (
+                        <span className="text-amber-300 font-medium">
+                          Step {scheduledFollowup.stepNumber} Scheduled for {new Date(scheduledFollowup.scheduledDate).toLocaleDateString('en-AU')}
+                        </span>
+                      ) : sentFollowup ? (
+                        <span className="text-sky-300 font-medium">
+                          Step {sentFollowup.stepNumber} Sent on {new Date(sentFollowup.sentAt || sentFollowup.updatedAt).toLocaleDateString('en-AU')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">None Scheduled</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -298,188 +441,158 @@ export default function SentPage() {
             </div>
             <Link
               href="/review"
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold inline-flex items-center gap-1.5"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-md mt-2"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>Go to Review Queue & Send Outreach</span>
+              Go to Review Queue →
             </Link>
           </div>
         )}
       </div>
 
-      {/* Complete Audit & Timeline Modal */}
-      {selectedSent && (
+      {/* MODAL 1: 1-Click AI Response Sender */}
+      {isReplyModalOpen && activeReply && (
+        <Modal
+          isOpen={isReplyModalOpen}
+          onClose={() => setIsReplyModalOpen(false)}
+          title={`⚡ 1-Click AI Reply Dispatch to ${activeReply.senderEmail}`}
+          subtitle="AI has analyzed the prospect's intent and drafted a tailored rate card / booking response for Opal Chauffeurs."
+          maxWidth="2xl"
+        >
+          <div className="space-y-4">
+            {responseSuccessMsg && (
+              <div className="p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{responseSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Inbound Reply Display */}
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
+              <div className="text-xs font-bold text-emerald-400 flex items-center justify-between">
+                <span>Client Message Received:</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30">
+                  {activeReply.aiClassification}
+                </span>
+              </div>
+              <p className="text-xs text-slate-200 italic">&ldquo;{activeReply.bodyText}&rdquo;</p>
+              <div className="text-[11px] text-slate-400 pt-1">
+                <b>Detected Intent:</b> {activeReply.aiDetectedIntent}
+              </div>
+            </div>
+
+            {/* Editable AI-Generated Response */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>AI-Drafted Response (Editable):</span>
+                </label>
+                <span className="text-[10px] text-slate-400">Sent from book@opalchauffeurs.com.au</span>
+              </div>
+              <textarea
+                rows={7}
+                value={replyResponseText}
+                onChange={(e) => setReplyResponseText(e.target.value)}
+                className="w-full p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-100 font-sans leading-relaxed focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsReplyModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendResponse}
+                disabled={sendingResponse || !replyResponseText.trim()}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                {sendingResponse ? <RotateCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span>{sendingResponse ? 'Dispatching Reply...' : '🚀 Approve & Send Reply Now'}</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL 2: Ingest / Log Inbound Reply from Zoho */}
+      {isIngestModalOpen && targetSentForIngest && (
+        <Modal
+          isOpen={isIngestModalOpen}
+          onClose={() => setIsIngestModalOpen(false)}
+          title={`📥 Ingest Client Reply from ${targetSentForIngest.recipientName}`}
+          subtitle="Paste or enter the message received in Zoho Mail. AI will classify the intent, halt future follow-ups, and generate a customized response draft."
+          maxWidth="lg"
+        >
+          <form onSubmit={handleIngestReplySubmit} className="space-y-4">
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+              <div><b>Company:</b> {targetSentForIngest.company?.name || targetSentForIngest.event?.name}</div>
+              <div><b>Recipient Email:</b> {targetSentForIngest.recipientEmail}</div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Inbound Message Content / Reply Text:
+              </label>
+              <textarea
+                rows={4}
+                required
+                value={ingestBodyText}
+                onChange={(e) => setIngestBodyText(e.target.value)}
+                placeholder="e.g. Ok, please share your rate card or call us at 2pm."
+                className="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsIngestModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={ingesting || !ingestBodyText.trim()}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md flex items-center gap-2 disabled:opacity-50 transition-all"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>{ingesting ? 'Analyzing...' : '⚡ AI Analyze & Create Response Draft'}</span>
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* MODAL 3: Audit History Viewer */}
+      {isViewerOpen && selectedSent && (
         <Modal
           isOpen={isViewerOpen}
           onClose={() => setIsViewerOpen(false)}
-          title={`Outreach Audit: ${selectedSent.recipientName} (${selectedSent.company?.name || selectedSent.event?.name || 'Client'})`}
-          subtitle={`Dispatched from book@opalchauffeurs.com.au on ${new Date(selectedSent.sentAt).toLocaleString('en-AU')}`}
-          maxWidth="4xl"
+          title={`Outreach Audit: ${selectedSent.company?.name || selectedSent.event?.name || 'Organization'}`}
+          subtitle={`Dispatched to ${selectedSent.recipientName} (${selectedSent.recipientEmail}) on ${new Date(selectedSent.sentAt).toLocaleString('en-AU')}`}
+          maxWidth="2xl"
         >
           <div className="space-y-4">
-            {/* Meta summary strip */}
-            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">Recipient</span>
-                <span className="text-slate-200 font-semibold">{selectedSent.recipientName}</span>
-                <span className="text-slate-400 text-[11px] block font-mono">{selectedSent.recipientEmail}</span>
-              </div>
-
-              <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">Reply Status</span>
-                {selectedSent.hasReply || selectedSent.replies?.length > 0 ? (
-                  <span className="text-emerald-400 font-bold flex items-center gap-1 mt-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Replied</span>
-                  </span>
-                ) : (
-                  <span className="text-amber-400 font-bold flex items-center gap-1 mt-0.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Awaiting Response</span>
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-bold">Follow-Up Cadence</span>
-                {selectedSent.hasReply ? (
-                  <span className="text-emerald-400 text-xs font-semibold">Cancelled (Replied)</span>
-                ) : selectedSent.followUps?.length > 0 ? (
-                  <span className="text-sky-300 text-xs font-semibold">
-                    {selectedSent.followUps.filter((f: any) => f.status === 'SCHEDULED').length} Step(s) Scheduled
-                  </span>
-                ) : (
-                  <span className="text-slate-400 text-xs">None</span>
-                )}
-              </div>
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+              <div className="text-xs text-slate-400 font-bold">Original Subject:</div>
+              <div className="text-xs text-slate-100">{selectedSent.subject}</div>
+              <div className="text-xs text-slate-400 font-bold pt-2">Original Email Dispatched:</div>
+              <p className="text-xs text-slate-300 whitespace-pre-wrap bg-slate-900 p-3 rounded-xl border border-slate-800 font-sans leading-relaxed">
+                {selectedSent.exactSentBody}
+              </p>
             </div>
 
-            {/* Modal Tabs */}
-            <div className="flex border-b border-slate-800 gap-2">
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
-                onClick={() => setActiveTabInModal('INITIAL')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all ${
-                  activeTabInModal === 'INITIAL'
-                    ? 'border-amber-500 text-amber-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                1. Initial Dispatched Email
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTabInModal('FOLLOWUPS')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all ${
-                  activeTabInModal === 'FOLLOWUPS'
-                    ? 'border-sky-500 text-sky-400'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                2. Follow-Up Sequence ({selectedSent.followUps?.length || 0})
-              </button>
-
-              {(selectedSent.hasReply || selectedSent.replies?.length > 0) && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTabInModal('REPLY')}
-                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all ${
-                    activeTabInModal === 'REPLY'
-                      ? 'border-emerald-500 text-emerald-400'
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  3. Client Inbound Reply (🟢 Active)
-                </button>
-              )}
-            </div>
-
-            {/* Tab 1: Initial Email */}
-            {activeTabInModal === 'INITIAL' && (
-              <div className="space-y-2">
-                <div className="text-xs font-semibold text-slate-300">
-                  Subject: <span className="text-slate-100 font-bold">{selectedSent.subject}</span>
-                </div>
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 font-sans whitespace-pre-wrap leading-relaxed max-h-[45vh] overflow-y-auto">
-                  {selectedSent.exactSentBody}
-                </div>
-              </div>
-            )}
-
-            {/* Tab 2: Follow-up Sequences */}
-            {activeTabInModal === 'FOLLOWUPS' && (
-              <div className="space-y-3 max-h-[45vh] overflow-y-auto">
-                {selectedSent.followUps?.length > 0 ? (
-                  selectedSent.followUps.map((f: any) => (
-                    <div key={f.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <div className="font-bold text-slate-200">
-                          Step {f.stepNumber}: {f.stepNumber === 1 ? 'Day 5 Check-in' : 'Day 10 Final Follow-up'}
-                        </div>
-                        <Badge
-                          variant={f.status === 'SCHEDULED' ? 'amber' : f.status === 'SENT' ? 'emerald' : 'rose'}
-                          size="sm"
-                        >
-                          {f.status} {f.cancelReason ? `(${f.cancelReason})` : ''}
-                        </Badge>
-                      </div>
-                      <div className="text-slate-400 text-[11px]">
-                        Target Date: {new Date(f.scheduledDate).toLocaleDateString('en-AU')}
-                      </div>
-                      <div className="p-2.5 rounded-lg bg-slate-900 text-slate-300 font-sans whitespace-pre-wrap leading-relaxed">
-                        {f.draftBody}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-6 text-center text-slate-500 text-xs">
-                    No follow-ups recorded for this outreach.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab 3: Client Inbound Reply */}
-            {activeTabInModal === 'REPLY' && selectedSent.replies?.length > 0 && (
-              <div className="space-y-3 max-h-[45vh] overflow-y-auto">
-                {selectedSent.replies.map((r: any) => (
-                  <div key={r.id} className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/40 space-y-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-emerald-300 uppercase">
-                        AI Intent: {r.aiClassification}
-                      </span>
-                      <span className="text-slate-400 text-[11px]">
-                        {new Date(r.receivedAt).toLocaleString('en-AU')}
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 whitespace-pre-wrap leading-relaxed">
-                      {r.bodyText}
-                    </div>
-
-                    <div className="text-slate-300 text-[11px]">
-                      <b>AI Summary:</b> {r.aiExecutiveSummary}
-                    </div>
-
-                    <div className="pt-1">
-                      <Link
-                        href="/inbox"
-                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold inline-flex items-center gap-1.5"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Open Response & Send Reply in AI Inbox</span>
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2 border-t border-slate-800">
-              <button
                 onClick={() => setIsViewerOpen(false)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-semibold"
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold"
               >
                 Close Audit
               </button>

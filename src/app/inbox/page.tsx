@@ -191,14 +191,23 @@ export default function InboxPage() {
     setSendingReply(true);
     setSendSuccessMsg(null);
     try {
-      // Simulate live dispatch of the drafted response
-      await new Promise((r) => setTimeout(r, 800));
-      setSendSuccessMsg(`Reply approved & sent from book@opalchauffeurs.com.au to ${selectedReply.senderEmail}!`);
-      setTimeout(() => {
-        setIsDetailOpen(false);
-      }, 2000);
+      const res = await fetch(`/api/replies/${selectedReply.id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ responseText: replyTextToEdit }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSendSuccessMsg(`✨ Response dispatched successfully to ${selectedReply.senderEmail}!`);
+        fetchInbox();
+        setTimeout(() => {
+          setIsDetailOpen(false);
+        }, 2000);
+      } else {
+        alert(data.error || 'Failed to dispatch reply');
+      }
     } catch (err: any) {
-      alert('Error sending reply');
+      alert(err.message || 'Error sending reply');
     } finally {
       setSendingReply(false);
     }
