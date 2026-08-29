@@ -80,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'SYSTEM & AI GOVERNANCE',
       items: [
-        { name: 'AI & Scoring Rules', href: '/settings', icon: Sparkles },
+        { name: '⚙️ Settings & System Config', href: '/settings', icon: Sparkles },
         { name: 'Audit & Activity Logs', href: '/logs', icon: History },
         { name: 'Background Jobs', href: '/jobs', icon: Cpu },
       ],

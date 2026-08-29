@@ -70,9 +70,9 @@ export class EmailDispatcher {
       tls: {
         rejectUnauthorized: false,
       },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 12000,
     } as any);
   }
 
@@ -121,7 +121,7 @@ export class EmailDispatcher {
   }
 
   /**
-   * Dispatches an email via configured SMTP with instant IPv4 connection
+   * Dispatches an email via configured SMTP with instant IPv4 connection & auto port 587 fallback
    */
   static async sendEmail(options: EmailSendOptions): Promise<{
     success: boolean;
@@ -140,12 +140,12 @@ export class EmailDispatcher {
       };
     }
 
+    const formattedFrom = `"${config.fromName}" <${config.fromEmail}>`;
+    const formattedTo = options.toName ? `"${options.toName}" <${options.to}>` : options.to;
+
+    // 1. Try Primary Port (465 SSL)
     try {
       const transporter = this.createTransporter(config);
-
-      const formattedFrom = `"${config.fromName}" <${config.fromEmail}>`;
-      const formattedTo = options.toName ? `"${options.toName}" <${options.to}>` : options.to;
-
       const result = await transporter.sendMail({
         from: formattedFrom,
         to: formattedTo,
@@ -160,26 +160,48 @@ export class EmailDispatcher {
         mode: 'REAL_SMTP',
         messageId: result.messageId,
       };
-    } catch (err: any) {
-      console.error('SMTP Dispatch Error:', err);
-      return {
-        success: false,
-        mode: 'REAL_SMTP',
-        error: err.message || 'SMTP transmission error',
-      };
+    } catch (primaryErr: any) {
+      console.warn('Port 465 attempt failed, trying Port 587 fallback:', primaryErr.message);
+
+      // 2. Automatic Fallback to Port 587 (TLS/STARTTLS)
+      try {
+        const fallbackConfig: SmtpConfig = { ...config, port: 587, secure: false };
+        const fallbackTransporter = this.createTransporter(fallbackConfig);
+        const result = await fallbackTransporter.sendMail({
+          from: formattedFrom,
+          to: formattedTo,
+          replyTo: options.replyTo || config.fromEmail,
+          subject: options.subject,
+          text: options.text,
+          html: options.html || options.text.replace(/\n/g, '<br/>'),
+        });
+
+        return {
+          success: true,
+          mode: 'REAL_SMTP',
+          messageId: result.messageId,
+        };
+      } catch (fallbackErr: any) {
+        console.error('SMTP Dispatch Error on both ports:', fallbackErr);
+        return {
+          success: false,
+          mode: 'REAL_SMTP',
+          error: fallbackErr.message || primaryErr.message || 'SMTP transmission error',
+        };
+      }
     }
   }
 
   /**
-   * Verifies SMTP connection and sends a test email
+   * Verifies SMTP connection and sends a test email with automatic port 587 fallback
    */
   static async testConnection(
     config: SmtpConfig,
     testRecipient: string
   ): Promise<{ success: boolean; message: string; messageId?: string }> {
+    // 1. Try Primary Port
     try {
       const transporter = this.createTransporter(config);
-
       await transporter.verify();
 
       const testResult = await transporter.sendMail({
@@ -194,11 +216,33 @@ export class EmailDispatcher {
         message: `Test email dispatched successfully to ${testRecipient}!`,
         messageId: testResult.messageId,
       };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err.message || 'Failed to authenticate with SMTP server. Please verify your App Password or port.',
-      };
+    } catch (primaryErr: any) {
+      console.warn('Test on port 465 failed, trying port 587 fallback:', primaryErr.message);
+
+      // 2. Fallback to Port 587
+      try {
+        const fallbackConfig: SmtpConfig = { ...config, port: 587, secure: false };
+        const fallbackTransporter = this.createTransporter(fallbackConfig);
+        await fallbackTransporter.verify();
+
+        const testResult = await fallbackTransporter.sendMail({
+          from: `"${config.fromName}" <${config.fromEmail}>`,
+          to: testRecipient,
+          subject: '✨ Opal Outreach AI - Real Email Delivery Test Successful (Port 587)',
+          text: `Hello,\n\nThis is a verification test from Opal Outreach AI.\n\nYour outgoing email configuration for ${config.fromEmail} (Port 587) is 100% operational!\n\nWarm regards,\nInaya\nOpal Chauffeurs Intelligence Team`,
+        });
+
+        return {
+          success: true,
+          message: `Test email dispatched successfully to ${testRecipient} via Port 587!`,
+          messageId: testResult.messageId,
+        };
+      } catch (fallbackErr: any) {
+        return {
+          success: false,
+          message: fallbackErr.message || primaryErr.message || 'Failed to authenticate with SMTP server. Please verify your App Password.',
+        };
+      }
     }
   }
 }
