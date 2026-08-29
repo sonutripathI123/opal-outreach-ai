@@ -11,6 +11,17 @@ try {
   console.warn('Could not set dns default result order:', e);
 }
 
+// Explicit IPv4-only socket resolver for Nodemailer
+function ipv4Lookup(hostname: string, options: any, callback: any) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  return dns.lookup(hostname, { family: 4 }, (err, address, family) => {
+    callback(err, address, 4);
+  });
+}
+
 export interface EmailSendOptions {
   to: string;
   toName?: string;
@@ -32,7 +43,7 @@ export interface SmtpConfig {
 
 export class EmailDispatcher {
   /**
-   * Creates an optimized Nodemailer transporter with strict IPv4 routing & auto space-stripping
+   * Creates an optimized Nodemailer transporter with custom IPv4 lookup & auto space-stripping
    */
   static createTransporter(config: SmtpConfig) {
     const cleanUser = (config.user || '').trim();
@@ -54,7 +65,8 @@ export class EmailDispatcher {
         user: cleanUser,
         pass: cleanPass,
       },
-      family: 4, // STRICT IPV4: Prevents Render ENETUNREACH on IPv6
+      lookup: ipv4Lookup,
+      family: 4, // STRICT IPV4: Eliminates Render ENETUNREACH on IPv6
       tls: {
         rejectUnauthorized: false,
       },
