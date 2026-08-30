@@ -7,26 +7,16 @@ import { logActivity, createNotification } from '@/lib/activity-logger';
 export const dynamic = 'force-dynamic';
 
 /**
- * Universal Multi-Platform Field Extractor
- * Automatically recognizes column headers from Apollo.io, Hunter.io, Snov.io, Anymail Finder, LinkedIn, and generic CSVs
+ * Exact or strict key extractor
  */
-function extractValue(item: Record<string, any>, aliases: string[]): string {
-  // 1. Direct match
-  for (const alias of aliases) {
-    if (item[alias] !== undefined && item[alias] !== null && String(item[alias]).trim() !== '') {
-      return String(item[alias]).trim();
-    }
-  }
-
-  // 2. Normalized alphanumeric match
+function getFieldByStrictKeys(item: Record<string, any>, exactKeys: string[]): string {
   const itemKeys = Object.keys(item);
-  for (const alias of aliases) {
-    const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const targetKey of exactKeys) {
+    const cleanTarget = targetKey.toLowerCase().replace(/[^a-z0-9]/g, '');
     for (const key of itemKeys) {
-      // Split off suffix like __1, __2
       const baseKey = key.split('__')[0];
       const cleanKey = baseKey.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (cleanKey === cleanAlias || (cleanKey.length > 3 && cleanAlias.length > 3 && (cleanKey.includes(cleanAlias) || cleanAlias.includes(cleanKey)))) {
+      if (cleanKey === cleanTarget) {
         const val = item[key];
         if (val !== undefined && val !== null && String(val).trim() !== '') {
           return String(val).trim();
@@ -34,27 +24,56 @@ function extractValue(item: Record<string, any>, aliases: string[]): string {
       }
     }
   }
-
   return '';
 }
 
 /**
- * Fallback to find any valid email string in the row object
+ * Robust Email Finder that scans all fields for a valid email address
  */
-function findAnyEmail(item: Record<string, any>): string {
+function findValidEmail(item: Record<string, any>): string {
+  // 1. Check common direct email keys
+  const directEmail = getFieldByStrictKeys(item, [
+    'email_address',
+    'emailaddress',
+    'email',
+    'work_email',
+    'corporate_email',
+    'contact_email',
+    'primary_email',
+    'value',
+  ]);
+  if (directEmail && directEmail.includes('@') && directEmail.includes('.')) {
+    return directEmail.toLowerCase().trim();
+  }
+
+  // 2. Scan all values for valid email regex
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  for (const key of Object.keys(item)) {
+    // Avoid scanning domain_name or website for email
+    if (key.toLowerCase().includes('domain') || key.toLowerCase().includes('website') || key.toLowerCase().includes('url')) {
+      continue;
+    }
+    const val = String(item[key] || '').trim();
+    const match = val.match(emailRegex);
+    if (match) {
+      return match[0].toLowerCase().trim();
+    }
+  }
+
+  // 3. Fallback scan all remaining keys
   for (const key of Object.keys(item)) {
     const val = String(item[key] || '').trim();
     const match = val.match(emailRegex);
     if (match) {
-      return match[0].toLowerCase();
+      return match[0].toLowerCase().trim();
     }
   }
+
   return '';
 }
 
 /**
- * Clean & Format Person Name from email if missing
+ * Clean & Format Person Name from email prefix (e.g. yash.kumar -> Yash Kumar)
  */
 function formatNameFromEmail(email: string): string {
   if (!email || !email.includes('@')) return 'Executive Travel Coordinator';
@@ -91,37 +110,49 @@ export async function POST(req: NextRequest) {
     let skippedCount = 0;
 
     for (const item of rows) {
-      // 1. Extract Email with broad aliases + regex fallback
-      let contactEmail = extractValue(item, [
-        'email_address',
-        'email',
-        'work_email',
-        'corporate_email',
-        'contact_email',
-        'direct_email',
-        'primary_email',
-        'contactEmail',
-        'value',
-      ]);
+      // 1. EXTRACT EMAIL (Strict: must have @ and .)
+      const contactEmail = findValidEmail(item);
 
-      if (!contactEmail || !contactEmail.includes('@')) {
-        contactEmail = findAnyEmail(item);
+      // 2. EXTRACT FIRST & LAST NAME (Highest priority for personal greeting)
+      const firstName = getFieldByStrictKeys(item, ['first_name', 'firstname', 'first', 'given_name']);
+      const lastName = getFieldByStrictKeys(item, ['last_name', 'lastname', 'last', 'family_name', 'surname']);
+
+      let contactFullName = '';
+      if (firstName || lastName) {
+        contactFullName = `${firstName} ${lastName}`.trim();
       }
 
-      // 2. Extract Company Name (Apollo, Hunter, Snov, Anymail Finder, LinkedIn, Generic)
-      let companyName = extractValue(item, [
+      // If full_name header exists (and is NOT domain_name or company_name)
+      if (!contactFullName) {
+        const rawFullName = getFieldByStrictKeys(item, ['full_name', 'fullname', 'person_name', 'contact_name', 'lead_name']);
+        if (rawFullName && !rawFullName.includes('.com') && !rawFullName.includes('http')) {
+          contactFullName = rawFullName;
+        }
+      }
+
+      // Fallback name from email address (e.g. yash.kumar@macquarie.com -> Yash Kumar)
+      if (!contactFullName && contactEmail) {
+        contactFullName = formatNameFromEmail(contactEmail);
+      }
+
+      if (!contactFullName) {
+        contactFullName = 'Executive Operations Lead';
+      }
+
+      // 3. EXTRACT COMPANY NAME
+      let companyName = getFieldByStrictKeys(item, [
+        'company',
+        'company_name',
+        'companyname',
         'organization',
         'organization_name',
-        'company_name',
-        'company',
-        'companyName',
         'account_name',
         'employer',
         'business_name',
       ]);
 
-      // 3. Extract Website / Domain
-      let website = extractValue(item, [
+      // 4. EXTRACT WEBSITE / DOMAIN
+      let website = getFieldByStrictKeys(item, [
         'website',
         'domain',
         'domain_name',
@@ -129,10 +160,9 @@ export async function POST(req: NextRequest) {
         'company_domain',
         'url',
         'web',
-        'homepage',
       ]);
 
-      // If company name is missing but website/domain/email exists, infer company name
+      // Infer Company Name if missing
       if (!companyName && website) {
         const cleanDomain = website.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
         const brand = cleanDomain.split('.')[0];
@@ -152,7 +182,7 @@ export async function POST(req: NextRequest) {
         companyName = 'Corporate Partner';
       }
 
-      // Format domain & website cleanly
+      // Format domain & website
       if (!website) {
         if (contactEmail && contactEmail.includes('@') && !contactEmail.endsWith('gmail.com') && !contactEmail.endsWith('yahoo.com')) {
           website = `https://${contactEmail.split('@')[1]}`;
@@ -163,42 +193,16 @@ export async function POST(req: NextRequest) {
 
       const domain = website.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
 
-      // 4. Extract Contact Name (Full name or First + Last)
-      let contactFullName = extractValue(item, [
-        'full_name',
-        'name',
-        'contact_name',
-        'person_name',
-        'contactName',
-        'lead_name',
-      ]);
-
-      if (!contactFullName) {
-        const firstName = extractValue(item, ['first_name', 'first', 'firstname', 'given_name']);
-        const lastName = extractValue(item, ['last_name', 'last', 'lastname', 'family_name', 'surname']);
-        if (firstName || lastName) {
-          contactFullName = `${firstName} ${lastName}`.trim();
-        }
-      }
-
-      if (!contactFullName && contactEmail) {
-        contactFullName = formatNameFromEmail(contactEmail);
-      }
-
-      if (!contactFullName) {
-        contactFullName = 'Executive Travel Coordinator';
-      }
-
-      // 5. Extract Job Title / Role
-      let contactRole = extractValue(item, [
+      // 5. EXTRACT JOB TITLE / ROLE
+      let contactRole = getFieldByStrictKeys(item, [
         'job_title',
-        'title',
-        'position',
+        'jobtitle',
         'position_raw',
+        'position',
+        'title',
         'role',
         'designation',
         'headline',
-        'contactRole',
         'occupation',
       ]);
 
@@ -206,14 +210,14 @@ export async function POST(req: NextRequest) {
         contactRole = 'Head of Executive Operations & Corporate Travel';
       }
 
-      // 6. Extract Location / Suburb
-      const city = extractValue(item, ['city', 'location', 'suburb', 'company_city', 'person_city']) || 'Melbourne';
-      const state = extractValue(item, ['state', 'region', 'province', 'company_state']) || 'VIC';
-      const industry = extractValue(item, ['industry', 'sector', 'company_industry', 'category']) || 'Corporate & Professional Services';
-      const size = extractValue(item, ['headcount', 'size', 'company_size', 'employees', 'employee_count', 'number_of_employees']) || 'Medium (50-200)';
-      const linkedinUrl = extractValue(item, ['linkedin_url', 'linkedin', 'person_linkedin_url', 'profile_url', 'person_linkedin']);
+      // 6. EXTRACT LOCATION / METRICS
+      const city = getFieldByStrictKeys(item, ['city', 'location', 'suburb', 'company_city', 'person_city']) || 'Melbourne';
+      const state = getFieldByStrictKeys(item, ['state', 'region', 'province', 'company_state']) || 'VIC';
+      const industry = getFieldByStrictKeys(item, ['industry', 'sector', 'company_industry', 'category']) || 'Financial & Corporate Services';
+      const size = getFieldByStrictKeys(item, ['headcount', 'size', 'company_size', 'employees', 'employee_count']) || 'Large (1000+)';
+      const linkedinUrl = getFieldByStrictKeys(item, ['linkedin_url', 'linkedin', 'person_linkedin_url', 'profile_url']);
 
-      // Check if contact already exists in database
+      // Check if contact already exists by email
       if (contactEmail) {
         const existingContact = await prisma.contact.findFirst({
           where: { email: { equals: contactEmail.toLowerCase().trim() } },
@@ -224,7 +228,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Find or create Company
+      // Find or create Company record
       let company = await prisma.company.findFirst({
         where: {
           OR: [
@@ -236,7 +240,6 @@ export async function POST(req: NextRequest) {
       });
 
       if (!company) {
-        // Run Corporate Opportunity Scoring Engine
         const analysis = CorporateIntelligenceEngine.analyzeCompany({
           name: companyName,
           website: website.startsWith('http') ? website : `https://${website}`,
@@ -289,7 +292,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Generate Tailored 2-Layer Personalized Outreach Pitch
+      // Generate Personalized Email Draft
       const generated = EmailGenerator.generateEmail({
         businessProfile: {
           companyName: bProfile.companyName || 'Opal Chauffeurs',
