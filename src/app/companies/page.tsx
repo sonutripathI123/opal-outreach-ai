@@ -184,23 +184,61 @@ export default function CompaniesPage() {
     }
   };
 
-  // Helper to parse CSV string into objects
+  // Robust RFC 4180 compliant CSV parser that handles quotes, commas in addresses, and duplicate headers
   const parseCsvStringToObjects = (text: string) => {
-    const lines = text.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+    const lines: string[][] = [];
+    let row: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        if (inQuotes && text[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        row.push(current.trim().replace(/^["']|["']$/g, ''));
+        current = '';
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && text[i + 1] === '\n') i++;
+        row.push(current.trim().replace(/^["']|["']$/g, ''));
+        if (row.some((c) => c !== '')) {
+          lines.push(row);
+        }
+        row = [];
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    if (current.length > 0 || row.length > 0) {
+      row.push(current.trim().replace(/^["']|["']$/g, ''));
+      if (row.some((c) => c !== '')) {
+        lines.push(row);
+      }
+    }
+
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(',').map((h) => h.replace(/^["']|["']$/g, '').trim());
-    const rows = [];
+    const headers = lines[0].map((h, idx) => h.trim() || `col_${idx}`);
+    const result: Record<string, string>[] = [];
 
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map((v) => v.replace(/^["']|["']$/g, '').trim());
-      const row: any = {};
-      headers.forEach((h, idx) => {
-        row[h] = values[idx] || '';
+    for (let r = 1; r < lines.length; r++) {
+      const rowValues = lines[r];
+      const rowObj: Record<string, string> = {};
+      headers.forEach((header, idx) => {
+        const val = rowValues[idx] !== undefined ? rowValues[idx] : '';
+        rowObj[header] = val;
+        rowObj[`${header}__${idx}`] = val;
+        rowObj[`col_${idx}`] = val;
       });
-      rows.push(row);
+      result.push(rowObj);
     }
-    return rows;
+    return result;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

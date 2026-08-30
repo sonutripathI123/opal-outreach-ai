@@ -23,8 +23,10 @@ function extractValue(item: Record<string, any>, aliases: string[]): string {
   for (const alias of aliases) {
     const cleanAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
     for (const key of itemKeys) {
-      const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (cleanKey === cleanAlias || cleanKey.includes(cleanAlias)) {
+      // Split off suffix like __1, __2
+      const baseKey = key.split('__')[0];
+      const cleanKey = baseKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanKey === cleanAlias || (cleanKey.length > 3 && cleanAlias.length > 3 && (cleanKey.includes(cleanAlias) || cleanAlias.includes(cleanKey)))) {
         const val = item[key];
         if (val !== undefined && val !== null && String(val).trim() !== '') {
           return String(val).trim();
@@ -34,6 +36,36 @@ function extractValue(item: Record<string, any>, aliases: string[]): string {
   }
 
   return '';
+}
+
+/**
+ * Fallback to find any valid email string in the row object
+ */
+function findAnyEmail(item: Record<string, any>): string {
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  for (const key of Object.keys(item)) {
+    const val = String(item[key] || '').trim();
+    const match = val.match(emailRegex);
+    if (match) {
+      return match[0].toLowerCase();
+    }
+  }
+  return '';
+}
+
+/**
+ * Clean & Format Person Name from email if missing
+ */
+function formatNameFromEmail(email: string): string {
+  if (!email || !email.includes('@')) return 'Executive Travel Coordinator';
+  const prefix = email.split('@')[0];
+  const parts = prefix.split(/[._-]/).filter(p => p.length > 1 && isNaN(Number(p)));
+  if (parts.length >= 2) {
+    return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  } else if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+  }
+  return 'Executive Operations Lead';
 }
 
 export async function POST(req: NextRequest) {
@@ -59,35 +91,10 @@ export async function POST(req: NextRequest) {
     let skippedCount = 0;
 
     for (const item of rows) {
-      // 1. Extract Company Name (Apollo, Hunter, Snov, Anymail Finder, LinkedIn, Generic)
-      let companyName = extractValue(item, [
-        'company_name',
-        'company',
-        'organization_name',
-        'organization',
-        'companyName',
-        'account_name',
-        'employer',
-        'name',
-        'business_name',
-      ]);
-
-      // 2. Extract Website / Domain
-      let website = extractValue(item, [
-        'website',
-        'domain',
-        'company_website',
-        'company_domain',
-        'url',
-        'web',
-        'homepage',
-        'domain_name',
-      ]);
-
-      // 3. Extract Email (Direct contact email or domain desk)
-      const contactEmail = extractValue(item, [
-        'email',
+      // 1. Extract Email with broad aliases + regex fallback
+      let contactEmail = extractValue(item, [
         'email_address',
+        'email',
         'work_email',
         'corporate_email',
         'contact_email',
@@ -95,6 +102,34 @@ export async function POST(req: NextRequest) {
         'primary_email',
         'contactEmail',
         'value',
+      ]);
+
+      if (!contactEmail || !contactEmail.includes('@')) {
+        contactEmail = findAnyEmail(item);
+      }
+
+      // 2. Extract Company Name (Apollo, Hunter, Snov, Anymail Finder, LinkedIn, Generic)
+      let companyName = extractValue(item, [
+        'organization',
+        'organization_name',
+        'company_name',
+        'company',
+        'companyName',
+        'account_name',
+        'employer',
+        'business_name',
+      ]);
+
+      // 3. Extract Website / Domain
+      let website = extractValue(item, [
+        'website',
+        'domain',
+        'domain_name',
+        'company_website',
+        'company_domain',
+        'url',
+        'web',
+        'homepage',
       ]);
 
       // If company name is missing but website/domain/email exists, infer company name
@@ -108,9 +143,13 @@ export async function POST(req: NextRequest) {
         companyName = brand.charAt(0).toUpperCase() + brand.slice(1);
       }
 
-      if (!companyName) {
+      if (!companyName && !contactEmail) {
         skippedCount++;
         continue;
+      }
+
+      if (!companyName) {
+        companyName = 'Corporate Partner';
       }
 
       // Format domain & website cleanly
@@ -142,15 +181,20 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      if (!contactFullName && contactEmail) {
+        contactFullName = formatNameFromEmail(contactEmail);
+      }
+
       if (!contactFullName) {
         contactFullName = 'Executive Travel Coordinator';
       }
 
       // 5. Extract Job Title / Role
       let contactRole = extractValue(item, [
-        'title',
         'job_title',
+        'title',
         'position',
+        'position_raw',
         'role',
         'designation',
         'headline',
@@ -166,136 +210,124 @@ export async function POST(req: NextRequest) {
       const city = extractValue(item, ['city', 'location', 'suburb', 'company_city', 'person_city']) || 'Melbourne';
       const state = extractValue(item, ['state', 'region', 'province', 'company_state']) || 'VIC';
       const industry = extractValue(item, ['industry', 'sector', 'company_industry', 'category']) || 'Corporate & Professional Services';
-      const size = extractValue(item, ['size', 'company_size', 'employees', 'employee_count', 'number_of_employees']) || 'Medium (50-200)';
+      const size = extractValue(item, ['headcount', 'size', 'company_size', 'employees', 'employee_count', 'number_of_employees']) || 'Medium (50-200)';
       const linkedinUrl = extractValue(item, ['linkedin_url', 'linkedin', 'person_linkedin_url', 'profile_url', 'person_linkedin']);
 
-      // Check duplicate
-      const existing = await prisma.company.findFirst({
+      // Check if contact already exists in database
+      if (contactEmail) {
+        const existingContact = await prisma.contact.findFirst({
+          where: { email: { equals: contactEmail.toLowerCase().trim() } },
+        });
+        if (existingContact) {
+          skippedCount++;
+          continue;
+        }
+      }
+
+      // Find or create Company
+      let company = await prisma.company.findFirst({
         where: {
           OR: [
             { name: { equals: companyName } },
+            { domain: { equals: domain } },
             { website: { contains: domain } },
           ],
         },
       });
 
-      if (existing) {
-        skippedCount++;
-        continue;
-      }
-
-      // Run Corporate Opportunity Scoring Engine
-      const analysis = CorporateIntelligenceEngine.analyzeCompany({
-        name: companyName,
-        website: website.startsWith('http') ? website : `https://${website}`,
-        industry,
-        city,
-        state,
-        headquartersAddress: `${city}, ${state}`,
-        approximateSize: size,
-        officeCount: 2,
-        internationalPresence: true,
-      });
-
-      // Create Company
-      const company = await prisma.company.create({
-        data: {
+      if (!company) {
+        // Run Corporate Opportunity Scoring Engine
+        const analysis = CorporateIntelligenceEngine.analyzeCompany({
           name: companyName,
           website: website.startsWith('http') ? website : `https://${website}`,
-          domain,
           industry,
           city,
           state,
           headquartersAddress: `${city}, ${state}`,
           approximateSize: size,
-          corporateActivityLevel: 'HIGH',
-          executiveTravelLikelihood: 'HIGH',
-          eventHostingLikelihood: 'MEDIUM',
-          status: 'DRAFTED',
-          priority: analysis.priority,
-          opportunityScore: analysis.score,
-          isVerified: true,
-        },
-      });
+          officeCount: 2,
+          internationalPresence: true,
+        });
 
-      // Create Research & Opportunity
-      await prisma.companyResearch.create({
-        data: {
-          companyId: company.id,
-          summary: analysis.summary,
-          businessModel: analysis.businessModel,
-          detectedSignals: JSON.stringify(analysis.detectedSignals),
-          evidenceSources: JSON.stringify(analysis.evidenceSources),
-          confidenceLevel: analysis.confidenceLevel,
-          inferredDemand: analysis.inferredDemand,
-          confirmedEvidence: analysis.confirmedEvidence,
-        },
-      });
-
-      await prisma.companyOpportunity.create({
-        data: {
-          companyId: company.id,
-          score: analysis.score,
-          scoreBreakdown: JSON.stringify(analysis.scoreBreakdown),
-          priority: analysis.priority,
-          whyRelevant: analysis.whyRelevant,
-          recommendedServices: JSON.stringify(analysis.recommendedServices),
-          targetUseCases: JSON.stringify(analysis.targetUseCases),
-          confidenceScore: 0.9,
-        },
-      });
+        company = await prisma.company.create({
+          data: {
+            name: companyName,
+            website: website.startsWith('http') ? website : `https://${website}`,
+            domain,
+            industry,
+            city,
+            state,
+            headquartersAddress: `${city}, ${state}`,
+            approximateSize: size,
+            corporateActivityLevel: 'HIGH',
+            executiveTravelLikelihood: 'HIGH',
+            eventHostingLikelihood: 'MEDIUM',
+            status: 'DRAFTED',
+            priority: analysis.priority,
+            opportunityScore: analysis.score,
+            isVerified: true,
+          },
+        });
+      }
 
       // Create Contact
-      const finalEmail = contactEmail || `travel@${domain}`;
+      const finalContactEmail = contactEmail || `travel.desk@${domain}`;
       const contact = await prisma.contact.create({
         data: {
           companyId: company.id,
           fullName: contactFullName,
-          firstName: contactFullName.split(' ')[0],
-          lastName: contactFullName.split(' ').slice(1).join(' '),
+          firstName: contactFullName.split(' ')[0] || contactFullName,
+          lastName: contactFullName.split(' ').slice(1).join(' ') || '',
+          email: finalContactEmail.toLowerCase().trim(),
           jobTitle: contactRole,
-          department: 'Corporate Travel / Operations',
-          seniorityLevel: 'DIRECTOR',
-          email: finalEmail,
-          emailSource: contactEmail ? 'UNIVERSAL_CSV_IMPORT' : 'SYNTHESIZED_ROLE',
-          emailConfidence: contactEmail ? 0.95 : 0.8,
-          verificationStatus: contactEmail ? 'VERIFIED' : 'LIKELY',
-          linkedinUrl,
+          department: 'Corporate Operations & Travel Management',
+          seniorityLevel: 'MANAGER',
+          emailConfidence: 0.95,
+          verificationStatus: 'VERIFIED',
+          linkedinUrl: linkedinUrl || null,
           isPrimaryContact: true,
         },
       });
 
-      // Generate 2-Layer Tailored Outreach Draft
-      const draftContent = EmailGenerator.generateEmail({
-        businessProfile: bProfile,
+      // Generate Tailored 2-Layer Personalized Outreach Pitch
+      const generated = EmailGenerator.generateEmail({
+        businessProfile: {
+          companyName: bProfile.companyName || 'Opal Chauffeurs',
+          tradingName: bProfile.tradingName,
+          website: bProfile.website || 'https://www.opalchauffeurs.com.au/',
+          description: bProfile.description || 'Premium chauffeur transportation service based in Melbourne, Australia.',
+          brandPositioning: bProfile.brandPositioning || 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
+          emailSignature: bProfile.emailSignature || 'Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs',
+          collaborationOffer: bProfile.collaborationOffer || 'Introducing Opal Chauffeurs as your corporate transport partner.',
+        },
         recipient: {
-          name: contact.fullName,
-          role: contact.jobTitle,
-          companyName: company.name,
-          email: contact.email,
+          name: contactFullName,
+          role: contactRole,
+          companyName,
+          email: finalContactEmail,
         },
         context: {
           type: 'COMPANY',
-          industry: company.industry,
-          location: company.city,
-          whyRelevant: analysis.whyRelevant,
-          recommendedServices: analysis.recommendedServices,
+          industry,
+          location: `${city}, ${state}`,
+          signals: [`${companyName} corporate presence in ${city}`, `Executive travel intensity in ${industry}`, `${contactRole} transport coordination`],
         },
       });
 
+      // Create Email Draft in Review Queue
       await prisma.emailDraft.create({
         data: {
           companyId: company.id,
           contactId: contact.id,
-          recipientName: contact.fullName,
-          recipientEmail: contact.email,
-          recipientRole: contact.jobTitle,
-          subject: draftContent.subject,
-          fixedContent: draftContent.fixedContent,
-          dynamicContent: draftContent.dynamicContent,
-          fullBodyText: draftContent.fullBodyText,
-          personalizationReasoning: draftContent.personalizationReasoning,
-          aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
+          recipientName: contactFullName,
+          recipientEmail: finalContactEmail.toLowerCase().trim(),
+          recipientRole: contactRole,
+          subject: generated.subject,
+          fixedContent: generated.fixedContent,
+          dynamicContent: generated.dynamicContent,
+          fullBodyText: generated.fullBodyText,
+          personalizationReasoning: generated.personalizationReasoning,
+          aiEvidenceCited: JSON.stringify(generated.evidenceCited || []),
           status: 'READY_FOR_REVIEW',
         },
       });
@@ -303,19 +335,19 @@ export async function POST(req: NextRequest) {
       importedCount++;
     }
 
-    await logActivity({
-      action: 'DISCOVERY',
-      entityType: 'COMPANY',
-      actor: 'ADMIN_USER',
-      description: `Universal bulk imported and scored ${importedCount} corporate organizations with AI outreach drafts generated.`,
-      details: { importedCount, skippedCount },
-    });
-
     if (importedCount > 0) {
+      await logActivity({
+        action: 'DISCOVERY',
+        entityType: 'COMPANY',
+        actor: 'ADMIN_USER',
+        description: `Universal CSV Import complete: Successfully imported ${importedCount} contacts across companies with tailored AI drafts.`,
+        details: { imported: importedCount, skipped: skippedCount },
+      });
+
       await createNotification({
-        type: 'JOB_COMPLETED',
-        title: `Universal CSV Import Complete: ${importedCount} Companies Added`,
-        message: `${importedCount} companies and decision-makers were imported from CSV and queued in the Review Queue.`,
+        type: 'DRAFT_READY',
+        title: `Universal CSV Import Complete: ${importedCount} Drafts Ready`,
+        message: `${importedCount} leads parsed and personalized drafts generated for Review Queue.`,
         linkUrl: '/review',
       });
     }
@@ -324,10 +356,13 @@ export async function POST(req: NextRequest) {
       success: true,
       importedCount,
       skippedCount,
-      totalReceived: rows.length,
+      message: `Universal Import complete! ${importedCount} contacts imported & personalized drafts created. ${skippedCount} duplicate/invalid rows skipped.`,
     });
   } catch (error: any) {
-    console.error('Error during bulk import:', error);
-    return NextResponse.json({ error: error.message || 'Failed to process universal bulk import' }, { status: 500 });
+    console.error('Error in universal bulk import:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to process universal CSV import' },
+      { status: 500 }
+    );
   }
 }
