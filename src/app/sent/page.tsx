@@ -48,6 +48,9 @@ export default function SentPage() {
   const [ingestBodyText, setIngestBodyText] = useState('Ok, please share corporate rates and booking procedure.');
   const [ingesting, setIngesting] = useState(false);
 
+  const [syncingZoho, setSyncingZoho] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
   const fetchSent = async () => {
     try {
       const res = await fetch('/api/sent');
@@ -70,6 +73,26 @@ export default function SentPage() {
   const handleManualRefresh = () => {
     setRefreshing(true);
     fetchSent();
+  };
+
+  const handleSyncZoho = async () => {
+    setSyncingZoho(true);
+    setSyncStatusMsg(null);
+    try {
+      const res = await fetch('/api/replies/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setSyncStatusMsg(`✨ Zoho Inbox checked! ${data.syncedCount} new replies auto-synced.`);
+        fetchSent();
+      } else {
+        setSyncStatusMsg(data.error || 'Zoho sync completed.');
+      }
+    } catch (err: any) {
+      setSyncStatusMsg(err.message || 'Error syncing Zoho inbox');
+    } finally {
+      setSyncingZoho(false);
+      setTimeout(() => setSyncStatusMsg(null), 6000);
+    }
   };
 
   const openViewer = (sent: any) => {
@@ -221,16 +244,38 @@ export default function SentPage() {
               </div>
             </div>
 
-            <button
-              onClick={handleManualRefresh}
-              disabled={refreshing}
-              className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center justify-center gap-1.5 transition-all self-stretch sm:self-auto disabled:opacity-50"
-            >
-              <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-400' : 'text-slate-400'}`} />
-              <span>{refreshing ? 'Syncing...' : 'Sync Ledger'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSyncZoho}
+                disabled={syncingZoho}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 transition-all self-stretch sm:self-auto disabled:opacity-50"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${syncingZoho ? 'animate-spin text-white' : 'text-emerald-200'}`} />
+                <span>{syncingZoho ? 'Checking Zoho...' : '🔄 Check Zoho Inbox'}</span>
+              </button>
+
+              <button
+                onClick={handleManualRefresh}
+                disabled={refreshing}
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 flex items-center justify-center gap-1.5 transition-all self-stretch sm:self-auto disabled:opacity-50"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-amber-400' : 'text-slate-400'}`} />
+                <span>{refreshing ? 'Syncing...' : 'Sync Ledger'}</span>
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Sync Status Banner */}
+        {syncStatusMsg && (
+          <div className="p-3.5 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{syncStatusMsg}</span>
+            </div>
+            <button onClick={() => setSyncStatusMsg(null)} className="text-slate-400 hover:text-slate-200 text-xs">✕</button>
+          </div>
+        )}
 
         {/* Filter & Search Bar */}
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
