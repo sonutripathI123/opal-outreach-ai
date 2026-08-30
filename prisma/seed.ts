@@ -663,7 +663,7 @@ Email: bookings@opalchauffeurs.com.au | Direct: +61 400 000 000`,
   for (const s of systemSettingsData) {
     await prisma.systemSettings.upsert({
       where: { key: s.key },
-      update: s,
+      update: {},
       create: s,
     });
   }
