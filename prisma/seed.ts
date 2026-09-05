@@ -6,14 +6,19 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting Opal Outreach AI database seeding...');
 
-  // 1. Create or update Default Admin User
-  const passwordHash = await bcrypt.hash('02122025', 10);
+  // 1. Create or update Default Admin User (credentials come from environment secrets)
+  const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  const adminPassword = process.env.ADMIN_PASSWORD || '';
+  if (!adminEmail || !adminPassword) {
+    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD environment variables must be set before seeding the admin user.');
+  }
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
   const adminUser = await prisma.user.upsert({
-    where: { email: 'sonutripathi9305@gmail.com' },
+    where: { email: adminEmail },
     update: { passwordHash },
     create: {
-      email: 'sonutripathi9305@gmail.com',
-      name: 'Sonu Tripathi (Admin)',
+      email: adminEmail,
+      name: 'Administrator',
       passwordHash,
       role: 'ADMIN',
     },

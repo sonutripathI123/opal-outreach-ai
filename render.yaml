@@ -9,16 +9,21 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Secrets below are intentionally NOT stored in this file.
+      # Set their values in the Render dashboard (Environment tab). sync:false
+      # keeps them out of the blueprint/version control.
       - key: DATABASE_URL
-        value: file:./dev.db
+        sync: false
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: ADMIN_EMAIL
-        value: sonutripathi9305@gmail.com
+        sync: false
       - key: ADMIN_PASSWORD
-        value: "02122025"
+        sync: false
       - key: ANTHROPIC_API_KEY
-        value: ""
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false
       - key: AI_MODEL_PRIMARY
         value: claude-3-5-sonnet-20241022
       - key: NEXT_PUBLIC_APP_NAME

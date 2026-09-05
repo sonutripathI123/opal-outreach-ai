@@ -23,7 +23,9 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local Env Files (Secrets)
+.env
 .env*.local
+.env.production
 
 # TypeScript
 *.tsbuildinfo

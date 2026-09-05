@@ -11,6 +11,21 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   try {
+    // Optional shared-secret guard. When INBOUND_WEBHOOK_SECRET is configured,
+    // callers must present it via the `x-webhook-secret` header or `?secret=`
+    // query param. This keeps the public endpoint from being abused to inject
+    // fake replies and silently cancel scheduled follow-ups.
+    const expectedSecret = process.env.INBOUND_WEBHOOK_SECRET;
+    if (expectedSecret) {
+      const provided =
+        req.headers.get('x-webhook-secret') ||
+        new URL(req.url).searchParams.get('secret') ||
+        '';
+      if (provided !== expectedSecret) {
+        return NextResponse.json({ error: 'Unauthorized webhook request' }, { status: 401 });
+      }
+    }
+
     const rawBody = await req.json().catch(() => ({}));
 
     // Support multiple webhook payload shapes (Brevo, SendGrid, Mailgun, Generic)
