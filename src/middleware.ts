@@ -20,6 +20,7 @@ const PUBLIC_PATHS = [
   '/api/auth/logout',
   '/api/auth/me',
   '/api/replies/webhook', // external email providers post here; guarded by its own optional secret
+  '/api/cron', // scheduled worker; guarded by its own CRON_SECRET
   '/healthz',
 ];
 
