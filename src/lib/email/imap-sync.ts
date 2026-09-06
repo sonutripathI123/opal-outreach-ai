@@ -113,19 +113,18 @@ export class ZohoImapSyncEngine {
           }
         });
 
-        // Search for recent messages in the last 7 days
+        // Search for recent messages in the last 7 days.
+        // ImapFlow's fetch() takes a sequence/UID range, not a search query —
+        // so we search() first for matching UIDs, then fetch those.
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 7);
 
-        const searchCriteria = {
-          since: sinceDate,
-        };
+        const uids = await client.search({ since: sinceDate }, { uid: true });
+        const uidList = Array.isArray(uids) ? uids : [];
 
-        for await (const message of client.fetch(searchCriteria, {
-          envelope: true,
-          source: true,
-          bodyStructure: true,
-        })) {
+        for await (const message of uidList.length > 0
+          ? client.fetch(uidList, { envelope: true, source: true }, { uid: true })
+          : []) {
           const fromAddress = message.envelope?.from?.[0]?.address?.toLowerCase()?.trim();
           if (!fromAddress) continue;
 
