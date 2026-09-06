@@ -3,6 +3,7 @@ import { MELBOURNE_TARGET_COMPANIES } from '@/lib/data/targets';
 import { prisma } from '@/lib/prisma';
 import { ApolloPoolManager } from '@/lib/enrichment/apollo';
 import { GooglePlacesClient } from '@/lib/discovery/google-places';
+import { OpenStreetMapClient } from '@/lib/discovery/openstreetmap';
 
 export const dynamic = 'force-dynamic';
 
@@ -380,6 +381,20 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       console.warn('Google Places discovery failed:', e);
+    }
+
+    // 0c. Free OpenStreetMap discovery (no key/card). Best-effort; skipped on
+    //     error. Enabled by default; set DISCOVERY_OSM=false to disable.
+    if (process.env.DISCOVERY_OSM !== 'false') {
+      try {
+        const osmCompanies = await OpenStreetMapClient.searchCompaniesByLocation(locationQuery.trim());
+        if (osmCompanies.length > 0) {
+          matched.push(...osmCompanies);
+          sourcesUsed.push('OPENSTREETMAP');
+        }
+      } catch (e) {
+        console.warn('OpenStreetMap discovery failed:', e);
+      }
     }
 
     const liveCount = matched.length;
