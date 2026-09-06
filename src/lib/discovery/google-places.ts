@@ -86,7 +86,7 @@ export class GooglePlacesClient {
             industry,
             suburb: location,
             address: p.formattedAddress || location,
-            size: 'Medium (50-200)',
+            size: 'Unknown',
             whyTarget: `${industry} in ${location} — potential need for executive transfers, airport pickups, and client/event transport.`,
             targetRoles: ['Executive Assistant', 'Office Manager', 'Head of Operations', 'Events / Front Office Manager'],
             source: 'GOOGLE_PLACES',

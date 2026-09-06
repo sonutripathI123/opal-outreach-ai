@@ -39,9 +39,69 @@ function toDomain(url?: string): string {
   return url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].trim().toLowerCase();
 }
 
-function labelFromTags(tags: Record<string, string>): string {
-  const raw = tags.office || tags.tourism || tags.amenity || tags.shop || tags.company || 'Business';
-  return String(raw).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const OFFICE_LABELS: Record<string, string> = {
+  lawyer: 'Legal / Law Firm',
+  financial: 'Financial Services',
+  financial_advisor: 'Financial Advisory',
+  accountant: 'Accounting Firm',
+  tax_advisor: 'Tax & Advisory',
+  insurance: 'Insurance',
+  it: 'Technology / IT',
+  company: 'Corporate Office',
+  government: 'Government / Public Sector',
+  consulting: 'Consulting',
+  estate_agent: 'Real Estate',
+  property_management: 'Property Management',
+  engineer: 'Engineering',
+  architect: 'Architecture',
+  advertising_agency: 'Marketing & Advertising',
+  telecommunication: 'Telecommunications',
+  energy_supplier: 'Energy & Resources',
+  research: 'Research & Development',
+  educational_institution: 'Education',
+  employment_agency: 'Recruitment',
+  logistics: 'Logistics',
+  coworking: 'Coworking / Serviced Offices',
+};
+
+/**
+ * Derive an accurate industry label, demand rationale and likely decision-maker
+ * roles from real OSM tags for a given business type. Nothing is fabricated —
+ * unknown attributes stay "Unknown".
+ */
+function categorize(
+  tags: Record<string, string>,
+  location: string
+): { industry: string; whyTarget: string; targetRoles: string[]; size: string } {
+  const office = (tags.office || '').toLowerCase();
+  const tourism = (tags.tourism || '').toLowerCase();
+  const amenity = (tags.amenity || '').toLowerCase();
+
+  if (tourism === 'hotel' || amenity === 'hotel') {
+    return {
+      industry: 'Hotel & Hospitality',
+      whyTarget: `Hotel in ${location} — recurring guest and VIP airport transfers, wedding/event shuttles, and corporate booking-account potential.`,
+      targetRoles: ['Front Office Manager', 'Concierge / Guest Services', 'Events & Conferencing Manager', 'General Manager'],
+      size: 'Unknown',
+    };
+  }
+
+  if (amenity === 'conference_centre' || tourism === 'convention_centre') {
+    return {
+      industry: 'Conference & Events Venue',
+      whyTarget: `Events venue in ${location} — delegate group transfers, VIP speaker airport pickups, and multi-vehicle event logistics.`,
+      targetRoles: ['Events & Operations Manager', 'Delegate Services Coordinator', 'Venue Director'],
+      size: 'Unknown',
+    };
+  }
+
+  const label = OFFICE_LABELS[office] || (office ? office.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Corporate Office');
+  return {
+    industry: label,
+    whyTarget: `${label} in ${location} — likely executive travel, visiting-client meetings and flight-tracked airport transfers suited to a corporate chauffeur account.`,
+    targetRoles: ['Executive Assistant', 'Office Manager', 'Head of Operations', 'Corporate Travel / Procurement'],
+    size: 'Unknown',
+  };
 }
 
 function addressFromTags(tags: Record<string, string>, fallback: string): string {
@@ -121,16 +181,16 @@ out tags 200;`;
       const domain = toDomain(tags.website || tags['contact:website'] || tags.url);
       if (/(google|facebook|linkedin|wikipedia|tripadvisor|yelp)\./.test(domain)) continue;
 
-      const industry = labelFromTags(tags);
+      const cat = categorize(tags, location);
       const company: OsmCompany = {
         name,
         domain,
-        industry,
-        suburb: location,
+        industry: cat.industry,
+        suburb: tags['addr:suburb'] || tags['addr:city'] || location,
         address: addressFromTags(tags, location),
-        size: 'Medium (50-200)',
-        whyTarget: `${industry} in ${location} — potential executive transfer, airport pickup and client/event transport needs.`,
-        targetRoles: ['Executive Assistant', 'Office Manager', 'Head of Operations', 'Front Office / Events Manager'],
+        size: cat.size,
+        whyTarget: cat.whyTarget,
+        targetRoles: cat.targetRoles,
         source: 'OPENSTREETMAP',
       };
 
