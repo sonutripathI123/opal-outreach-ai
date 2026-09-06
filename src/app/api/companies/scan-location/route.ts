@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MELBOURNE_TARGET_COMPANIES } from '@/lib/data/targets';
 import { prisma } from '@/lib/prisma';
+import { ApolloPoolManager } from '@/lib/enrichment/apollo';
 
 export const dynamic = 'force-dynamic';
 
@@ -351,6 +352,20 @@ export async function POST(req: NextRequest) {
     const cleanQuery = locationQuery.trim().toLowerCase();
 
     let matched: any[] = [];
+    let discoverySource: 'APOLLO_LIVE' | 'CURATED_LIST' = 'CURATED_LIST';
+
+    // 0. Preferred: live Apollo company discovery for the typed location.
+    //    Works for ANY location. Falls through to the curated list if Apollo
+    //    has no active key, the plan blocks search, or nothing is returned.
+    try {
+      const apolloCompanies = await ApolloPoolManager.searchCompaniesByLocation(locationQuery.trim(), 15);
+      if (apolloCompanies.length > 0) {
+        matched.push(...apolloCompanies);
+        discoverySource = 'APOLLO_LIVE';
+      }
+    } catch (e) {
+      console.warn('Apollo live company search failed, falling back to curated list:', e);
+    }
 
     // 1. Search in extended real location dictionary
     for (const [key, comps] of Object.entries(EXTENDED_TARGET_COMPANIES)) {
@@ -373,6 +388,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // De-duplicate by company name (Apollo live results take precedence).
+    const seen = new Set<string>();
+    matched = matched.filter((c) => {
+      const key = (c.name || '').toLowerCase().trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     // Check which companies are already in DB
     const existingDb = await prisma.company.findMany({
       select: { name: true, website: true },
@@ -387,6 +411,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       query: locationQuery,
+      discoverySource,
       totalFound: enriched.length,
       companies: enriched,
     });

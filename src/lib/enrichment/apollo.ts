@@ -25,6 +25,18 @@ export interface ApolloContactResult {
   apolloKeyUsedName?: string;
 }
 
+export interface ApolloCompanyResult {
+  name: string;
+  domain: string;
+  industry: string;
+  suburb: string;
+  address: string;
+  size: string;
+  whyTarget: string;
+  targetRoles: string[];
+  source: 'APOLLO_LIVE';
+}
+
 export class ApolloPoolManager {
   /**
    * Fetch all Apollo API Keys from database
@@ -179,5 +191,97 @@ export class ApolloPoolManager {
     }
 
     return null;
+  }
+
+  /**
+   * Live company discovery by location via Apollo's organization search.
+   * Returns [] when no active key, the plan blocks search, or nothing matches —
+   * callers fall back to their own static list in that case.
+   */
+  static async searchCompaniesByLocation(
+    location: string,
+    perPage: number = 15
+  ): Promise<ApolloCompanyResult[]> {
+    const pool = await this.getPool();
+    const activeKeys = pool.filter((k) => k.status === 'ACTIVE' && k.apiKey?.trim() !== '');
+    if (activeKeys.length === 0) return [];
+
+    const cleanLocation = location.trim();
+
+    for (const keyEntry of activeKeys) {
+      try {
+        const res = await fetch('https://api.apollo.io/v1/mixed_companies/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Api-Key': keyEntry.apiKey.trim(),
+          },
+          body: JSON.stringify({
+            organization_locations: [cleanLocation],
+            page: 1,
+            per_page: perPage,
+          }),
+        });
+
+        if (res.status === 429 || res.status === 402 || res.status === 403) {
+          keyEntry.status = 'LIMIT_REACHED';
+          keyEntry.lastError = `Company search blocked (HTTP ${res.status})`;
+          await this.savePool(pool);
+          continue; // try next key
+        }
+
+        if (!res.ok) {
+          keyEntry.lastError = `Company search HTTP ${res.status}`;
+          continue;
+        }
+
+        const data = await res.json().catch(() => ({}));
+        const orgs: any[] = data.organizations || data.accounts || [];
+        if (orgs.length === 0) return [];
+
+        keyEntry.lastUsedAt = new Date().toISOString();
+        await this.savePool(pool);
+
+        return orgs
+          .map((o) => this.mapOrganization(o, cleanLocation))
+          .filter((c): c is ApolloCompanyResult => c !== null);
+      } catch (err: any) {
+        keyEntry.lastError = err?.message || 'Company search error';
+      }
+    }
+
+    return [];
+  }
+
+  private static mapOrganization(o: any, queriedLocation: string): ApolloCompanyResult | null {
+    const name = o.name;
+    const domain = (o.primary_domain || o.website_url || '')
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .split('/')[0];
+    if (!name || !domain) return null;
+
+    const employees = Number(o.estimated_num_employees) || 0;
+    let size = 'Medium (50-200)';
+    if (employees >= 1000) size = 'Enterprise (1000+)';
+    else if (employees >= 200) size = 'Large (200-1000)';
+    else if (employees >= 50) size = 'Medium (50-200)';
+    else if (employees > 0) size = 'Small (1-50)';
+
+    const city = o.city || queriedLocation;
+    const state = o.state || 'VIC';
+    const industry = o.industry || 'Corporate & Professional Services';
+
+    return {
+      name,
+      domain,
+      industry,
+      suburb: city,
+      address: o.raw_address || [o.street_address, city, state].filter(Boolean).join(', ') || `${city}`,
+      size,
+      whyTarget: `${industry} organisation in ${city}${employees ? ` (~${employees.toLocaleString()} staff)` : ''}. Likely executive travel, airport transfers and client hosting needs.`,
+      targetRoles: ['Executive Assistant', 'Head of Corporate Travel', 'Office Manager', 'Director of Operations'],
+      source: 'APOLLO_LIVE',
+    };
   }
 }
