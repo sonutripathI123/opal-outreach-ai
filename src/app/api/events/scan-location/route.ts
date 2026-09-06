@@ -37,56 +37,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. If not found in known static catalog, generate dynamic AI event models for this location!
-    if (matchedEvents.length === 0) {
-      const formattedLocation = locationQuery.trim();
-      matchedEvents = [
-        {
-          id: `dyn-${Date.now()}-1`,
-          name: `${formattedLocation} Annual Executive Business Summit 2026`,
-          eventType: 'CONFERENCE',
-          startDate: '2026-10-15',
-          endDate: '2026-10-17',
-          venueName: `${formattedLocation} Premier Convention Center`,
-          venueAddress: `Commercial Precinct, ${formattedLocation} VIC`,
-          suburb: formattedLocation,
-          city: 'Melbourne',
-          state: 'VIC',
-          expectedAttendance: 1600,
-          vipPresenceLikelihood: 'HIGH',
-          ticketPriceRange: '$1,100 - $2,800 AUD',
-          whyRelevant: `High C-suite executive and keynote speaker presence arriving in ${formattedLocation}. Direct inside-terminal airport transit and hotel shuttle logistics required.`,
-          recommendedServices: ['Airport Transfers', 'Corporate Event & Conference Transfers', 'VIP & Luxury Private Transportation'],
-          organizerName: 'Sarah Thornton',
-          organizerCompany: `${formattedLocation} Industry Summits Group`,
-          organizerWebsite: `https://${formattedLocation.toLowerCase().replace(/[^a-z0-9]/g, '')}-summits.com.au`,
-          organizerEmail: `logistics@${formattedLocation.toLowerCase().replace(/[^a-z0-9]/g, '')}-summits.com.au`,
-          sourceUrl: `https://events.com.au/${formattedLocation.toLowerCase()}`,
-        },
-        {
-          id: `dyn-${Date.now()}-2`,
-          name: `${formattedLocation} Innovation & Corporate Gala Dinner 2026`,
-          eventType: 'GALA_DINNER',
-          startDate: '2026-11-20',
-          endDate: '2026-11-20',
-          venueName: `${formattedLocation} Grand Ballroom`,
-          venueAddress: `VIP Precinct, ${formattedLocation} VIC`,
-          suburb: formattedLocation,
-          city: 'Melbourne',
-          state: 'VIC',
-          expectedAttendance: 850,
-          vipPresenceLikelihood: 'HIGH',
-          ticketPriceRange: '$650 - $1,800 AUD',
-          whyRelevant: `Premier annual gala dinner requiring Mercedes-Benz S-Class VIP transport and Mercedes V-Class group shuttles for sponsor tables.`,
-          recommendedServices: ['VIP & Luxury Private Transportation', 'Mercedes V-Class Group Shuttles'],
-          organizerName: 'Marcus Sterling',
-          organizerCompany: 'National Corporate Events Australia',
-          organizerWebsite: 'https://corporateevents.com.au',
-          organizerEmail: 'events@corporateevents.com.au',
-          sourceUrl: `https://events.com.au/gala/${formattedLocation.toLowerCase()}`,
-        },
-      ];
-    }
+    // Note: we intentionally do NOT fabricate placeholder events with made-up
+    // organiser names/emails for unknown locations — sending to invented
+    // addresses causes bounces and harms sender reputation. Unknown locations
+    // simply return no events from the curated catalog.
 
     // Check which events are already in our database
     const existingEvents = await prisma.event.findMany({
