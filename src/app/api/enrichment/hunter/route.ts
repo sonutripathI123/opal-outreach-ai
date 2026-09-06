@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
         });
 
         // Generate tailored draft
-        const generated = EmailGenerator.generateEmail({
+        const generated = await EmailGenerator.generateEmailSmart({
           businessProfile: {
             companyName: bProfile.companyName || 'Opal Chauffeurs',
             tradingName: bProfile.tradingName,

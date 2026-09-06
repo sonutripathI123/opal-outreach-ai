@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
     };
 
     // Generate 2-layer event personalized email draft
-    const draftContent = EmailGenerator.generateEmail({
+    const draftContent = await EmailGenerator.generateEmailSmart({
       businessProfile: bProfile,
       recipient: {
         name: contact.fullName,

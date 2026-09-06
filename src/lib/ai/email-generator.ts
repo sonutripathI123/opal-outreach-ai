@@ -1,3 +1,5 @@
+import { AIClient } from './client';
+
 export interface EmailGenerationParams {
   businessProfile: {
     companyName: string;
@@ -157,5 +159,127 @@ Email: book@opalchauffeurs.com.au | Direct: +61 432 000 718`;
       personalizationReasoning,
       evidenceCited,
     };
+  }
+
+  /**
+   * AI-powered personalized email generation using Claude.
+   * Falls back to the deterministic template if AI is disabled, has no API
+   * key, or fails/returns invalid output — so callers never break.
+   */
+  static async generateEmailSmart(params: EmailGenerationParams): Promise<{
+    subject: string;
+    fixedContent: string;
+    dynamicContent: string;
+    fullBodyText: string;
+    personalizationReasoning: string;
+    evidenceCited: string[];
+    generatedBy: 'AI' | 'TEMPLATE';
+  }> {
+    const template = this.generateEmail(params);
+
+    // Cost/latency kill-switch.
+    if (process.env.AI_EMAIL_GENERATION === 'false') {
+      return { ...template, generatedBy: 'TEMPLATE' };
+    }
+
+    try {
+      const apiKey = await AIClient.getApiKey();
+      if (!apiKey) return { ...template, generatedBy: 'TEMPLATE' };
+
+      const { businessProfile: bp, recipient, context } = params;
+      const isEvent = context.type === 'EVENT';
+      const signals = (context.signals || []).join('; ');
+      const services = (context.recommendedServices || []).join(', ');
+
+      const systemPrompt = `You are an expert B2B outreach copywriter for ${bp.companyName}, a premium Melbourne chauffeur and executive transport company. You write concise, warm, professional cold outreach emails to corporate decision-makers and event organisers. Emails must be specific and personalised (never generic spam), 110-170 words, in Australian English, with one clear soft call-to-action. Do NOT invent facts about the recipient's company; only use the context provided. Return ONLY a valid JSON object — no markdown, no commentary.`;
+
+      const userPrompt = `Write a personalised outreach email.
+
+SENDER (us):
+- Company: ${bp.companyName}${bp.tradingName ? ` (${bp.tradingName})` : ''}
+- Website: ${bp.website}
+- Positioning: ${bp.brandPositioning}
+- What we offer: ${bp.collaborationOffer}
+- Services to highlight: ${services || 'Executive chauffeur, flight-tracked airport transfers, corporate accounts, VIP & group transfers'}
+
+RECIPIENT:
+- Name: ${recipient.name}
+- Role: ${recipient.role}
+- ${isEvent ? 'Event' : 'Company'}: ${recipient.companyName || context.eventName || ''}
+- Industry: ${context.industry || 'Corporate'}
+- Location: ${context.location || 'Melbourne'}
+${context.venue ? `- Venue: ${context.venue}` : ''}
+${context.whyRelevant ? `- Why relevant: ${context.whyRelevant}` : ''}
+${signals ? `- Signals: ${signals}` : ''}
+
+REQUIREMENTS:
+- Address the recipient by first name.
+- Reference something specific about their ${isEvent ? 'event' : 'company/role'} from the context above.
+- End the body with EXACTLY this signature block, verbatim:
+${bp.emailSignature}
+
+Return JSON with this exact shape:
+{
+  "subject": "string (max 78 chars, specific, no emojis)",
+  "body": "string (full email body INCLUDING the signature block at the end; plain text using \\n for line breaks)",
+  "reasoning": "string (1-2 sentences on why this is personalised)",
+  "evidence": ["short string", "short string"]
+}`;
+
+      const res = await AIClient.complete({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.5,
+        maxTokens: 1100,
+        responseFormat: 'json',
+      });
+
+      // Only accept genuine Claude output (not the synthesized fallback engine).
+      if (res.provider !== 'anthropic-claude') {
+        return { ...template, generatedBy: 'TEMPLATE' };
+      }
+
+      const parsed = this.parseJson(res.content);
+      if (!parsed || !parsed.subject || !parsed.body) {
+        return { ...template, generatedBy: 'TEMPLATE' };
+      }
+
+      const fullBodyText = String(parsed.body).trim();
+      const paragraphs = fullBodyText.split('\n\n');
+      const dynamicContent = paragraphs.length > 1 ? paragraphs.slice(1, 2).join('\n\n') : fullBodyText;
+
+      return {
+        subject: String(parsed.subject).trim().slice(0, 140),
+        fixedContent: template.fixedContent,
+        dynamicContent,
+        fullBodyText,
+        personalizationReasoning: parsed.reasoning ? String(parsed.reasoning) : template.personalizationReasoning,
+        evidenceCited: Array.isArray(parsed.evidence)
+          ? parsed.evidence.map((e: any) => String(e)).slice(0, 6)
+          : template.evidenceCited,
+        generatedBy: 'AI',
+      };
+    } catch (err) {
+      console.warn('AI email generation failed, using template fallback:', err);
+      return { ...template, generatedBy: 'TEMPLATE' };
+    }
+  }
+
+  private static parseJson(text: string): any | null {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {}
+    const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch {}
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {}
+    }
+    return null;
   }
 }

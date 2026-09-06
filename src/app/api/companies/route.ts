@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
     };
 
     // Generate 2-Layer Personalized Outreach Draft
-    const draftContent = EmailGenerator.generateEmail({
+    const draftContent = await EmailGenerator.generateEmailSmart({
       businessProfile: bProfile,
       recipient: {
         name: contact.fullName,
