@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MELBOURNE_TARGET_COMPANIES } from '@/lib/data/targets';
 import { prisma } from '@/lib/prisma';
 import { ApolloPoolManager } from '@/lib/enrichment/apollo';
+import { GooglePlacesClient } from '@/lib/discovery/google-places';
 
 export const dynamic = 'force-dynamic';
 
@@ -352,20 +353,36 @@ export async function POST(req: NextRequest) {
     const cleanQuery = locationQuery.trim().toLowerCase();
 
     let matched: any[] = [];
-    let discoverySource: 'APOLLO_LIVE' | 'CURATED_LIST' = 'CURATED_LIST';
+    const sourcesUsed: string[] = [];
 
-    // 0. Preferred: live Apollo company discovery for the typed location.
-    //    Works for ANY location. Falls through to the curated list if Apollo
-    //    has no active key, the plan blocks search, or nothing is returned.
+    // 0a. Live Apollo company discovery (works for any location; needs an
+    //     active Apollo key whose plan allows organization search).
     try {
       const apolloCompanies = await ApolloPoolManager.searchCompaniesByLocation(locationQuery.trim(), 15);
       if (apolloCompanies.length > 0) {
         matched.push(...apolloCompanies);
-        discoverySource = 'APOLLO_LIVE';
+        sourcesUsed.push('APOLLO_LIVE');
       }
     } catch (e) {
-      console.warn('Apollo live company search failed, falling back to curated list:', e);
+      console.warn('Apollo live company search failed:', e);
     }
+
+    // 0b. Live Google Places discovery (real local B2B businesses + websites).
+    //     Needs GOOGLE_MAPS_API_KEY with the Places API enabled.
+    try {
+      const googleKey = process.env.GOOGLE_MAPS_API_KEY || '';
+      if (googleKey) {
+        const googleCompanies = await GooglePlacesClient.searchCompaniesByLocation(locationQuery.trim(), googleKey);
+        if (googleCompanies.length > 0) {
+          matched.push(...googleCompanies);
+          sourcesUsed.push('GOOGLE_PLACES');
+        }
+      }
+    } catch (e) {
+      console.warn('Google Places discovery failed:', e);
+    }
+
+    const liveCount = matched.length;
 
     // 1. Search in extended real location dictionary
     for (const [key, comps] of Object.entries(EXTENDED_TARGET_COMPANIES)) {
@@ -388,7 +405,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // De-duplicate by company name (Apollo live results take precedence).
+    if (matched.length > liveCount) sourcesUsed.push('CURATED_LIST');
+
+    // De-duplicate by company name (live results take precedence).
     const seen = new Set<string>();
     matched = matched.filter((c) => {
       const key = (c.name || '').toLowerCase().trim();
@@ -411,7 +430,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       query: locationQuery,
-      discoverySource,
+      sources: sourcesUsed.length ? sourcesUsed : ['CURATED_LIST'],
       totalFound: enriched.length,
       companies: enriched,
     });
