@@ -671,26 +671,47 @@ export default function CompaniesPage() {
                             onClick={async () => {
                               setRadarImportingDomain(item.domain);
                               try {
+                                // Preferred: if we have a domain, auto-run Hunter to
+                                // extract REAL decision-maker emails and generate AI
+                                // drafts for each — the true one-click pipeline.
+                                if (item.domain) {
+                                  const hres = await fetch('/api/enrichment/hunter', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ domains: [item.domain] }),
+                                  });
+                                  const hdata = await hres.json().catch(() => ({}));
+                                  if (hres.ok && hdata.success && (hdata.importedCount || 0) > 0) {
+                                    setRadarSuccessMsg(`"${item.name}": ${hdata.importedCount} real contact(s) found via Hunter & AI drafts created in Review Queue!`);
+                                    fetchCompanies();
+                                    setTimeout(() => setRadarSuccessMsg(null), 5000);
+                                    return;
+                                  }
+                                  // Hunter found nothing (or no key) — fall through to
+                                  // creating the company so you can enrich it manually.
+                                }
+
                                 const res = await fetch('/api/companies', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({
                                     name: item.name,
-                                    website: `https://${item.domain}`,
+                                    website: `https://${item.domain || item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com.au`,
                                     industry: item.industry,
                                     headquartersAddress: item.address,
                                     city: 'Melbourne',
                                     state: 'VIC',
-                                    approximateSize: item.size || 'Large (200-1000)',
+                                    approximateSize: item.size && item.size !== 'Unknown' ? item.size : 'Large (200-1000)',
                                     contactName: 'Director of Operations',
                                     contactRole: item.targetRoles?.[0] || 'Head of Executive Travel',
-                                    contactEmail: `travel@${item.domain}`,
                                   }),
                                 });
                                 if (res.ok) {
-                                  setRadarSuccessMsg(`"${item.name}" imported and proposal drafted in Review Queue!`);
+                                  setRadarSuccessMsg(item.domain
+                                    ? `"${item.name}" imported. Hunter found no verified emails — added for manual review.`
+                                    : `"${item.name}" imported (no website on record — add a domain to enrich emails).`);
                                   fetchCompanies();
-                                  setTimeout(() => setRadarSuccessMsg(null), 4000);
+                                  setTimeout(() => setRadarSuccessMsg(null), 5000);
                                 }
                               } catch (e) {
                                 console.error(e);
