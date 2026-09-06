@@ -237,11 +237,21 @@ export class EmailDispatcher {
     const config = await this.getSmtpConfig();
 
     if (!config) {
-      console.log(`[SIMULATED DISPATCH] No email credentials configured. Recorded email to: ${options.to}`);
+      // No email provider configured. By default we FAIL LOUDLY instead of
+      // pretending the email was sent — a fake "sent" is worse than an error.
+      // For deliberate dry-run testing, set ALLOW_SIMULATED_EMAIL=true.
+      if (process.env.ALLOW_SIMULATED_EMAIL === 'true') {
+        console.log(`[SIMULATED DISPATCH] Dry-run mode. Not actually sending to: ${options.to}`);
+        return {
+          success: true,
+          mode: 'SIMULATED_SAFE',
+          messageId: `sim-${Date.now()}`,
+        };
+      }
       return {
-        success: true,
+        success: false,
         mode: 'SIMULATED_SAFE',
-        messageId: `sim-${Date.now()}`,
+        error: 'No email provider configured. Add Brevo/Resend/SMTP credentials in Settings before sending.',
       };
     }
 

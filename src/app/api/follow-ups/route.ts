@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity-logger';
+import { EmailDispatcher } from '@/lib/email/dispatcher';
 
 export async function GET() {
   try {
@@ -48,11 +49,38 @@ export async function POST(req: NextRequest) {
     if (action === 'SEND') {
       const followUp = await prisma.followUp.findUnique({
         where: { id: followUpId },
-        include: { sentEmail: true },
+        include: { sentEmail: true, contact: true },
       });
 
       if (!followUp) {
         return NextResponse.json({ error: 'Follow-up not found' }, { status: 404 });
+      }
+
+      if (followUp.status === 'SENT') {
+        return NextResponse.json({ error: 'This follow-up has already been sent' }, { status: 400 });
+      }
+
+      const recipientEmail = followUp.sentEmail?.recipientEmail || followUp.contact?.email;
+      const recipientName = followUp.sentEmail?.recipientName || followUp.contact?.fullName || recipientEmail;
+
+      if (!recipientEmail) {
+        return NextResponse.json({ error: 'No recipient email available for this follow-up' }, { status: 400 });
+      }
+
+      // Actually dispatch the follow-up email via the configured provider.
+      const dispatchResult = await EmailDispatcher.sendEmail({
+        to: recipientEmail,
+        toName: recipientName || undefined,
+        subject: followUp.draftSubject,
+        text: followUp.draftBody,
+        replyTo: 'book@opalchauffeurs.com.au',
+      });
+
+      if (!dispatchResult.success) {
+        return NextResponse.json(
+          { error: `Follow-up not sent: ${dispatchResult.error || 'Email dispatch failed'}. Check your email provider in Settings.` },
+          { status: 400 }
+        );
       }
 
       const updated = await prisma.followUp.update({
@@ -68,10 +96,11 @@ export async function POST(req: NextRequest) {
         entityType: 'SENT_EMAIL',
         entityId: followUp.sentEmailId,
         actor: 'ADMIN_USER',
-        description: `Step ${followUp.stepNumber} follow-up sent to ${followUp.sentEmail.recipientEmail}.`,
+        description: `Step ${followUp.stepNumber} follow-up sent to ${recipientEmail} via ${dispatchResult.mode}.`,
+        details: { messageId: dispatchResult.messageId, mode: dispatchResult.mode },
       });
 
-      return NextResponse.json({ success: true, followUp: updated });
+      return NextResponse.json({ success: true, followUp: updated, dispatchResult });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
