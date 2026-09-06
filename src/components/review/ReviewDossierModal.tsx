@@ -147,7 +147,14 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
       const data = await res.json();
 
       if (res.ok && data.success) {
-        alert(`✨ Email successfully dispatched to ${targetEmail}!\n\nDelivery Mode: ${data.dispatchResult?.mode === 'REAL_SMTP' ? 'Real SMTP Inbox Delivery' : 'Recorded in CRM Vault'}`);
+        const modeLabels: Record<string, string> = {
+          BREVO_REST_API: 'Sent via Brevo email API',
+          RESEND_REST_API: 'Sent via Resend email API',
+          REAL_SMTP: 'Sent via SMTP',
+          SIMULATED_SAFE: 'Dry-run only (no real email sent)',
+        };
+        const modeLabel = modeLabels[data.dispatchResult?.mode] || 'Sent';
+        alert(`✨ Email dispatched to ${targetEmail}!\n\n${modeLabel}\n\nTip: agar inbox mein na dikhe to Spam/Promotions dekho, aur Brevo Logs mein delivery status check karo.`);
         onRefresh();
         onClose();
       } else {
