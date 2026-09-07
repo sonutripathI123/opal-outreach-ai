@@ -84,13 +84,16 @@ export class ZohoImapSyncEngine {
     const syncedResults: string[] = [];
     let syncedCount = 0;
 
+    let stage = 'connect';
     try {
       await client.connect();
 
       // Open INBOX in read-only mode
+      stage = 'open-mailbox';
       const lock = await client.getMailboxLock('INBOX');
 
       try {
+        stage = 'search';
         // Fetch sent email addresses to match replies
         const sentEmails = await prisma.sentEmail.findMany({
           select: {
@@ -122,6 +125,7 @@ export class ZohoImapSyncEngine {
         const uids = await client.search({ since: sinceDate }, { uid: true });
         const uidList = Array.isArray(uids) ? uids : [];
 
+        stage = 'fetch';
         for await (const message of uidList.length > 0
           ? client.fetch(uidList, { envelope: true, source: true }, { uid: true })
           : []) {
@@ -248,11 +252,23 @@ export class ZohoImapSyncEngine {
       try {
         await client.logout();
       } catch (_) {}
+      // ImapFlow errors carry extra detail (the raw server response, the
+      // failing command, an error code) that the generic .message ("Command
+      // failed") hides. Surface as much of it as we have so this is
+      // diagnosable from the API response alone, without server log access.
+      const detailParts = [
+        err.message,
+        err.response ? `server: ${err.response}` : null,
+        err.responseText ? `server: ${err.responseText}` : null,
+        err.command ? `command: ${err.command}` : null,
+        err.code ? `code: ${err.code}` : null,
+      ].filter(Boolean);
+      const detail = detailParts.length > 0 ? detailParts.join(' | ') : 'Failed to sync with Zoho IMAP server.';
       return {
         success: false,
         syncedCount,
         messages: syncedResults,
-        error: err.message || 'Failed to sync with Zoho IMAP server.',
+        error: `[stage: ${stage}] ${detail}`,
       };
     }
   }
