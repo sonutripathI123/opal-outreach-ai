@@ -87,7 +87,7 @@ export class PredictHqClient {
     location: string,
     apiKey: string,
     radiusKm: number = 50,
-    limit: number = 15
+    limit: number = 50
   ): Promise<PredictHqEvent[]> {
     if (!apiKey) return [];
 
@@ -99,7 +99,11 @@ export class PredictHqClient {
       within: `${radiusKm}km@${geo.lat},${geo.lon}`,
       country: 'AU',
       category: RELEVANT_CATEGORIES,
-      'active.gte': today,
+      // start.gte (not active.gte): active.gte also surfaces multi-day
+      // events/passes that started before today but are still "active",
+      // which crowded out genuinely upcoming single-day events (e.g. a
+      // one-off sports fixture a few days out) once the result limit hit.
+      'start.gte': today,
       sort: 'start',
       limit: String(limit),
     });
