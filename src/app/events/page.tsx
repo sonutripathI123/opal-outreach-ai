@@ -21,6 +21,7 @@ import {
   Building,
   Layers,
   ArrowRight,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -219,6 +220,23 @@ export default function EventsPage() {
     }
   };
 
+  const handleDeleteEvent = async (event: any) => {
+    if (!confirm(`Delete "${event.name}" and all its contacts, drafts, and sent-email records? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setEvents((prev) => prev.filter((e) => e.id !== event.id));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to delete event');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete event');
+    }
+  };
+
   const openReviewForEvent = (event: any) => {
     const draft = event.emailDrafts?.[0];
     if (draft) {
@@ -389,6 +407,14 @@ export default function EventsPage() {
                           <span>Review Pitch</span>
                         </button>
                       )}
+
+                      <button
+                        onClick={() => handleDeleteEvent(event)}
+                        title="Delete event"
+                        className="p-2 rounded-xl bg-slate-950 hover:bg-red-950/60 text-slate-500 hover:text-red-400 border border-slate-800 hover:border-red-500/40 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
