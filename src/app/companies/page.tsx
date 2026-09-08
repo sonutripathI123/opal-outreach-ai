@@ -23,6 +23,7 @@ import {
   Radar,
   Copy,
   Download,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -299,6 +300,23 @@ export default function CompaniesPage() {
     }
   };
 
+  const handleDeleteCompany = async (comp: any) => {
+    if (!confirm(`Delete "${comp.name}" and all its contacts, drafts, and sent-email records? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/companies/${comp.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setCompanies((prev) => prev.filter((c) => c.id !== comp.id));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Failed to delete company');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete company');
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -479,6 +497,14 @@ export default function CompaniesPage() {
                           <span>Review Draft</span>
                         </button>
                       )}
+
+                      <button
+                        onClick={() => handleDeleteCompany(comp)}
+                        title="Delete company"
+                        className="p-2 rounded-xl bg-slate-950 hover:bg-red-950/60 text-slate-500 hover:text-red-400 border border-slate-800 hover:border-red-500/40 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
