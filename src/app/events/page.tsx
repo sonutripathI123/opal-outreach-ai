@@ -142,7 +142,11 @@ export default function EventsPage() {
         setDiscoveredEvents((prev) =>
           prev.map((e) => (e.id === eventItem.id ? { ...e, isAlreadyImported: true } : e))
         );
-        setRadarSuccessMsg(`"${eventItem.name}" imported and Claude AI pitch generated in Review Queue!`);
+        setRadarSuccessMsg(
+          eventItem.organizerEmail
+            ? `"${eventItem.name}" imported and Claude AI pitch generated in Review Queue!`
+            : `"${eventItem.name}" imported — no organizer contact available yet. Open its event page to add one and generate a draft.`
+        );
         fetchEvents();
         setTimeout(() => setRadarSuccessMsg(null), 4000);
       }
@@ -169,7 +173,7 @@ export default function EventsPage() {
       if (res.ok) {
         const data = await res.json();
         setDiscoveredEvents((prev) => prev.map((e) => ({ ...e, isAlreadyImported: true })));
-        setRadarSuccessMsg(`Successfully imported ${data.importedCount} events and drafted AI proposals!`);
+        setRadarSuccessMsg(`Imported ${data.importedCount} events. Drafts were generated for the ones with a known organizer contact — open the rest to add a contact and generate their draft.`);
         fetchEvents();
         setTimeout(() => setRadarSuccessMsg(null), 4000);
       }
@@ -592,9 +596,15 @@ export default function EventsPage() {
 
                     {/* Organizer Info & Services */}
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400">
-                      <div>
-                        Host: <b className="text-slate-200">{item.organizerCompany}</b> ({item.organizerName}) • <span className="text-sky-400 font-mono">{item.organizerEmail}</span>
-                      </div>
+                      {item.organizerEmail ? (
+                        <div>
+                          Host: <b className="text-slate-200">{item.organizerCompany}</b> ({item.organizerName}) • <span className="text-sky-400 font-mono">{item.organizerEmail}</span>
+                        </div>
+                      ) : (
+                        <div className="text-amber-400 font-medium">
+                          No organizer contact yet (live event source) — add one after import to generate a draft.
+                        </div>
+                      )}
                       <div className="flex flex-wrap gap-1">
                         {item.recommendedServices?.map((srv: string, i: number) => (
                           <span key={i} className="px-2 py-0.5 rounded-md bg-slate-900 text-slate-300 text-[10px] border border-slate-800">

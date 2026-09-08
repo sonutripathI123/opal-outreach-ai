@@ -157,74 +157,82 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create Organizer Contact
-    const finalContactName = organizerName || 'Event Logistics Director';
-    const finalContactEmail = organizerEmail || `logistics@${organizerWebsite ? organizerWebsite.replace(/https?:\/\/(www\.)?/, '').split('/')[0] : 'eventhost.com.au'}`;
+    // Create Organizer Contact — ONLY when a real organizer email was
+    // provided. We never fabricate a "logistics@..." address: a guessed
+    // address is worse than no draft, since it bounces or reaches the wrong
+    // inbox. Without a real contact, the event is still saved for tracking
+    // and manual completion (add the contact later from the event page).
+    let contact = null;
+    let draft = null;
 
-    const contact = await prisma.contact.create({
-      data: {
-        eventId: event.id,
-        fullName: finalContactName,
-        firstName: finalContactName.split(' ')[0],
-        lastName: finalContactName.split(' ').slice(1).join(' '),
-        jobTitle: 'Head of Event Operations & Logistics',
-        department: 'Event Operations',
-        seniorityLevel: 'DIRECTOR',
-        email: finalContactEmail,
-        emailSource: organizerEmail ? 'OFFICIAL_WEBSITE' : 'GENERIC_FALLBACK',
-        emailConfidence: organizerEmail ? 0.95 : 0.8,
-        verificationStatus: organizerEmail ? 'VERIFIED' : 'LIKELY',
-        isPrimaryContact: true,
-      },
-    });
+    if (organizerEmail) {
+      const finalContactName = organizerName || 'Event Logistics Director';
 
-    // Fetch Business Profile
-    const profile = await prisma.businessProfile.findFirst();
-    const bProfile = profile || {
-      companyName: 'Opal Chauffeurs',
-      tradingName: 'Opal Chauffeurs',
-      website: 'https://www.opalchauffeurs.com.au/',
-      description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
-      brandPositioning: 'Melbourne’s premier executive transport partner.',
-      emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
-      collaborationOffer: 'Introducing Opal Chauffeurs as your event transportation partner.',
-    };
+      contact = await prisma.contact.create({
+        data: {
+          eventId: event.id,
+          fullName: finalContactName,
+          firstName: finalContactName.split(' ')[0],
+          lastName: finalContactName.split(' ').slice(1).join(' '),
+          jobTitle: 'Head of Event Operations & Logistics',
+          department: 'Event Operations',
+          seniorityLevel: 'DIRECTOR',
+          email: organizerEmail,
+          emailSource: 'OFFICIAL_WEBSITE',
+          emailConfidence: 0.95,
+          verificationStatus: 'VERIFIED',
+          isPrimaryContact: true,
+        },
+      });
 
-    // Generate 2-layer event personalized email draft
-    const draftContent = await EmailGenerator.generateEmailSmart({
-      businessProfile: bProfile,
-      recipient: {
-        name: contact.fullName,
-        role: contact.jobTitle,
-        companyName: organizerCompany || event.name,
-        email: contact.email,
-      },
-      context: {
-        type: 'EVENT',
-        eventName: event.name,
-        venue: event.venueName,
-        location: event.city,
-        whyRelevant: analysis.whyRelevant,
-        recommendedServices: analysis.recommendedServices,
-      },
-    });
+      // Fetch Business Profile
+      const profile = await prisma.businessProfile.findFirst();
+      const bProfile = profile || {
+        companyName: 'Opal Chauffeurs',
+        tradingName: 'Opal Chauffeurs',
+        website: 'https://www.opalchauffeurs.com.au/',
+        description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
+        brandPositioning: 'Melbourne’s premier executive transport partner.',
+        emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
+        collaborationOffer: 'Introducing Opal Chauffeurs as your event transportation partner.',
+      };
 
-    const draft = await prisma.emailDraft.create({
-      data: {
-        eventId: event.id,
-        contactId: contact.id,
-        recipientName: contact.fullName,
-        recipientEmail: contact.email,
-        recipientRole: contact.jobTitle,
-        subject: draftContent.subject,
-        fixedContent: draftContent.fixedContent,
-        dynamicContent: draftContent.dynamicContent,
-        fullBodyText: draftContent.fullBodyText,
-        personalizationReasoning: draftContent.personalizationReasoning,
-        aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
-        status: 'READY_FOR_REVIEW',
-      },
-    });
+      // Generate 2-layer event personalized email draft
+      const draftContent = await EmailGenerator.generateEmailSmart({
+        businessProfile: bProfile,
+        recipient: {
+          name: contact.fullName,
+          role: contact.jobTitle,
+          companyName: organizerCompany || event.name,
+          email: contact.email,
+        },
+        context: {
+          type: 'EVENT',
+          eventName: event.name,
+          venue: event.venueName,
+          location: event.city,
+          whyRelevant: analysis.whyRelevant,
+          recommendedServices: analysis.recommendedServices,
+        },
+      });
+
+      draft = await prisma.emailDraft.create({
+        data: {
+          eventId: event.id,
+          contactId: contact.id,
+          recipientName: contact.fullName,
+          recipientEmail: contact.email,
+          recipientRole: contact.jobTitle,
+          subject: draftContent.subject,
+          fixedContent: draftContent.fixedContent,
+          dynamicContent: draftContent.dynamicContent,
+          fullBodyText: draftContent.fullBodyText,
+          personalizationReasoning: draftContent.personalizationReasoning,
+          aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
+          status: 'READY_FOR_REVIEW',
+        },
+      });
+    }
 
     // Log Activity & Notification
     await logActivity({
@@ -232,7 +240,7 @@ export async function POST(req: NextRequest) {
       entityType: 'EVENT',
       entityId: event.id,
       actor: 'ADMIN_USER',
-      description: `Discovered upcoming event: ${event.name} at ${event.venueName} (Score: ${event.opportunityScore}/100).`,
+      description: `Discovered upcoming event: ${event.name} at ${event.venueName} (Score: ${event.opportunityScore}/100).${!contact ? ' No organizer contact provided — add one manually before drafting outreach.' : ''}`,
       details: { score: event.opportunityScore, venue: event.venueName },
     });
 
@@ -240,7 +248,9 @@ export async function POST(req: NextRequest) {
       await createNotification({
         type: 'HIGH_PRIORITY_EVENT',
         title: `High-Priority Event Detected: ${event.name}`,
-        message: `${event.name} at ${event.venueName} scored ${event.opportunityScore}/100. VIP transfer draft ready.`,
+        message: contact
+          ? `${event.name} at ${event.venueName} scored ${event.opportunityScore}/100. VIP transfer draft ready.`
+          : `${event.name} at ${event.venueName} scored ${event.opportunityScore}/100. Add an organizer contact to generate an outreach draft.`,
         linkUrl: '/review',
       });
     }

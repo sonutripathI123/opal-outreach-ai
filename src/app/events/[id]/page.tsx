@@ -29,6 +29,32 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [organizerForm, setOrganizerForm] = useState({ organizerName: '', organizerCompany: '', organizerEmail: '' });
+  const [submittingOrganizer, setSubmittingOrganizer] = useState(false);
+  const [organizerError, setOrganizerError] = useState<string | null>(null);
+
+  const handleAddOrganizer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingOrganizer(true);
+    setOrganizerError(null);
+    try {
+      const res = await fetch(`/api/events/${id}/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(organizerForm),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchEvent();
+      } else {
+        setOrganizerError(data.error || 'Failed to add organizer contact');
+      }
+    } catch (err: any) {
+      setOrganizerError(err.message || 'Failed to add organizer contact');
+    } finally {
+      setSubmittingOrganizer(false);
+    }
+  };
 
   const fetchEvent = async () => {
     try {
@@ -219,13 +245,50 @@ export default function EventDetailPage() {
             </div>
 
             {/* Organizer Contact Snapshot */}
-            {event.contacts?.[0] && (
+            {event.contacts?.[0] ? (
               <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 pt-3">
                 <div className="text-xs font-bold text-slate-300">Host / Organizer Contact</div>
                 <div className="text-xs font-bold text-slate-100">{event.contacts[0].fullName}</div>
                 <div className="text-xs text-sky-400">{event.contacts[0].jobTitle}</div>
                 <div className="text-xs text-slate-400">{event.contacts[0].email}</div>
               </div>
+            ) : (
+              <form onSubmit={handleAddOrganizer} className="p-4 rounded-2xl bg-slate-950 border border-amber-500/30 space-y-3">
+                <div className="text-xs font-bold text-amber-400">
+                  No organizer contact yet — this event was discovered without one. Add a verified contact to generate an outreach draft.
+                </div>
+                <input
+                  required
+                  type="text"
+                  placeholder="Organizer Name"
+                  value={organizerForm.organizerName}
+                  onChange={(e) => setOrganizerForm({ ...organizerForm, organizerName: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Organizer Company (optional)"
+                  value={organizerForm.organizerCompany}
+                  onChange={(e) => setOrganizerForm({ ...organizerForm, organizerCompany: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+                <input
+                  required
+                  type="email"
+                  placeholder="Organizer Email (verified)"
+                  value={organizerForm.organizerEmail}
+                  onChange={(e) => setOrganizerForm({ ...organizerForm, organizerEmail: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+                {organizerError && <div className="text-xs text-red-400">{organizerError}</div>}
+                <button
+                  type="submit"
+                  disabled={submittingOrganizer}
+                  className="w-full px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md transition-all disabled:opacity-50"
+                >
+                  {submittingOrganizer ? 'Generating Draft...' : 'Add Contact & Generate AI Draft'}
+                </button>
+              </form>
             )}
           </div>
         </div>

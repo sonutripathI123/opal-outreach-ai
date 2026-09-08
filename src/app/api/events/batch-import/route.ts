@@ -106,62 +106,66 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // Create Organizer Contact
-        const finalContactName = evData.organizerName || 'Event Logistics Director';
-        const finalContactEmail = evData.organizerEmail || `logistics@${evData.organizerWebsite ? evData.organizerWebsite.replace(/https?:\/\/(www\.)?/, '').split('/')[0] : 'events.com.au'}`;
+        // Create Organizer Contact — ONLY when a real organizer email was
+        // provided. We never fabricate a "logistics@..." address: without a
+        // verified contact the event is still saved for tracking, but the
+        // outreach draft is skipped rather than addressed to a guessed inbox.
+        if (evData.organizerEmail) {
+          const finalContactName = evData.organizerName || 'Event Logistics Director';
 
-        const contact = await prisma.contact.create({
-          data: {
-            eventId: createdEvent.id,
-            fullName: finalContactName,
-            firstName: finalContactName.split(' ')[0],
-            lastName: finalContactName.split(' ').slice(1).join(' '),
-            jobTitle: 'Head of Event Operations & Logistics',
-            department: 'Event Operations',
-            seniorityLevel: 'DIRECTOR',
-            email: finalContactEmail,
-            emailSource: 'OFFICIAL_WEBSITE',
-            emailConfidence: 0.95,
-            verificationStatus: 'VERIFIED',
-            isPrimaryContact: true,
-          },
-        });
+          const contact = await prisma.contact.create({
+            data: {
+              eventId: createdEvent.id,
+              fullName: finalContactName,
+              firstName: finalContactName.split(' ')[0],
+              lastName: finalContactName.split(' ').slice(1).join(' '),
+              jobTitle: 'Head of Event Operations & Logistics',
+              department: 'Event Operations',
+              seniorityLevel: 'DIRECTOR',
+              email: evData.organizerEmail,
+              emailSource: 'OFFICIAL_WEBSITE',
+              emailConfidence: 0.95,
+              verificationStatus: 'VERIFIED',
+              isPrimaryContact: true,
+            },
+          });
 
-        // Generate 2-layer personalized email draft
-        const draftContent = await EmailGenerator.generateEmailSmart({
-          businessProfile: bProfile,
-          recipient: {
-            name: contact.fullName,
-            role: contact.jobTitle,
-            companyName: evData.organizerCompany || createdEvent.name,
-            email: contact.email,
-          },
-          context: {
-            type: 'EVENT',
-            eventName: createdEvent.name,
-            venue: createdEvent.venueName,
-            location: createdEvent.city,
-            whyRelevant: analysis.whyRelevant,
-            recommendedServices: analysis.recommendedServices,
-          },
-        });
+          // Generate 2-layer personalized email draft
+          const draftContent = await EmailGenerator.generateEmailSmart({
+            businessProfile: bProfile,
+            recipient: {
+              name: contact.fullName,
+              role: contact.jobTitle,
+              companyName: evData.organizerCompany || createdEvent.name,
+              email: contact.email,
+            },
+            context: {
+              type: 'EVENT',
+              eventName: createdEvent.name,
+              venue: createdEvent.venueName,
+              location: createdEvent.city,
+              whyRelevant: analysis.whyRelevant,
+              recommendedServices: analysis.recommendedServices,
+            },
+          });
 
-        await prisma.emailDraft.create({
-          data: {
-            eventId: createdEvent.id,
-            contactId: contact.id,
-            recipientName: contact.fullName,
-            recipientEmail: contact.email,
-            recipientRole: contact.jobTitle,
-            subject: draftContent.subject,
-            fixedContent: draftContent.fixedContent,
-            dynamicContent: draftContent.dynamicContent,
-            fullBodyText: draftContent.fullBodyText,
-            personalizationReasoning: draftContent.personalizationReasoning,
-            aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
-            status: 'READY_FOR_REVIEW',
-          },
-        });
+          await prisma.emailDraft.create({
+            data: {
+              eventId: createdEvent.id,
+              contactId: contact.id,
+              recipientName: contact.fullName,
+              recipientEmail: contact.email,
+              recipientRole: contact.jobTitle,
+              subject: draftContent.subject,
+              fixedContent: draftContent.fixedContent,
+              dynamicContent: draftContent.dynamicContent,
+              fullBodyText: draftContent.fullBodyText,
+              personalizationReasoning: draftContent.personalizationReasoning,
+              aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
+              status: 'READY_FOR_REVIEW',
+            },
+          });
+        }
 
         importedResults.push(createdEvent.name);
       } catch (err: any) {
