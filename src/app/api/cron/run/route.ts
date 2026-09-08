@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { EmailDispatcher } from '@/lib/email/dispatcher';
 import { ZohoImapSyncEngine } from '@/lib/email/imap-sync';
-import { logActivity } from '@/lib/activity-logger';
+import { processDueFollowUps } from '@/lib/jobs/follow-ups';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,95 +34,34 @@ async function runCron(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const result: {
-    ranAt: string;
-    repliesSynced: number;
-    followUpsSent: number;
-    followUpsCancelled: number;
-    followUpsFailed: number;
-    notes: string[];
-  } = {
-    ranAt: new Date().toISOString(),
-    repliesSynced: 0,
-    followUpsSent: 0,
-    followUpsCancelled: 0,
-    followUpsFailed: 0,
-    notes: [],
-  };
+  const notes: string[] = [];
+  let repliesSynced = 0;
 
   // 1. Pull inbound replies (best-effort — ignored if IMAP isn't configured).
   try {
     const sync = await ZohoImapSyncEngine.syncInboundReplies();
     if (sync.success) {
-      result.repliesSynced = sync.syncedCount;
+      repliesSynced = sync.syncedCount;
     } else if (sync.error) {
-      result.notes.push(`reply-sync: ${sync.error}`);
+      notes.push(`reply-sync: ${sync.error}`);
     }
   } catch (e: any) {
-    result.notes.push(`reply-sync error: ${e?.message || 'unknown'}`);
+    notes.push(`reply-sync error: ${e?.message || 'unknown'}`);
   }
 
   // 2. Send follow-ups that are due now.
-  const due = await prisma.followUp.findMany({
-    where: { status: 'SCHEDULED', scheduledDate: { lte: new Date() } },
-    include: { sentEmail: true, contact: true },
-    orderBy: { scheduledDate: 'asc' },
-    take: 50,
+  const followUpResult = await processDueFollowUps('BACKGROUND_SCHEDULER');
+  notes.push(...followUpResult.notes);
+
+  return NextResponse.json({
+    success: true,
+    ranAt: new Date().toISOString(),
+    repliesSynced,
+    followUpsSent: followUpResult.sent,
+    followUpsCancelled: followUpResult.cancelled,
+    followUpsFailed: followUpResult.failed,
+    notes,
   });
-
-  for (const fu of due) {
-    // Stop-rule: don't chase a prospect who already replied.
-    if (fu.sentEmail?.hasReply) {
-      await prisma.followUp.update({
-        where: { id: fu.id },
-        data: { status: 'CANCELLED', cancelReason: 'REPLY_RECEIVED' },
-      });
-      result.followUpsCancelled++;
-      continue;
-    }
-
-    const to = fu.sentEmail?.recipientEmail || fu.contact?.email;
-    const toName = fu.sentEmail?.recipientName || fu.contact?.fullName || undefined;
-
-    if (!to) {
-      await prisma.followUp.update({
-        where: { id: fu.id },
-        data: { status: 'SKIPPED', cancelReason: 'MANUAL_STOP' },
-      });
-      result.followUpsFailed++;
-      continue;
-    }
-
-    const dispatch = await EmailDispatcher.sendEmail({
-      to,
-      toName,
-      subject: fu.draftSubject,
-      text: fu.draftBody,
-      replyTo: 'book@opalchauffeurs.com.au',
-    });
-
-    if (dispatch.success) {
-      await prisma.followUp.update({
-        where: { id: fu.id },
-        data: { status: 'SENT', sentAt: new Date() },
-      });
-      await logActivity({
-        action: 'EMAIL_SENT',
-        entityType: 'SENT_EMAIL',
-        entityId: fu.sentEmailId,
-        actor: 'BACKGROUND_SCHEDULER',
-        description: `Automated follow-up (step ${fu.stepNumber}) sent to ${to} via ${dispatch.mode}.`,
-        details: { messageId: dispatch.messageId, mode: dispatch.mode },
-      });
-      result.followUpsSent++;
-    } else {
-      // Leave it SCHEDULED so the next run retries (transient provider errors).
-      result.followUpsFailed++;
-      result.notes.push(`follow-up ${fu.id}: ${dispatch.error || 'dispatch failed'}`);
-    }
-  }
-
-  return NextResponse.json({ success: true, ...result });
 }
 
 export async function GET(req: NextRequest) {
