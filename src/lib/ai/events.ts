@@ -38,11 +38,33 @@ export class EventIntelligenceEngine {
 
     const { score, priority, breakdown, reasoning } = ScoringEngine.calculateEventScore(scoringInput, customWeights);
 
-    const transportSignals = [
-      `Estimated ${attendance.toLocaleString()} delegates convening at ${data.venueName}`,
-      `Keynote speakers and VIP delegates arriving via ${city} Airport requiring flight tracking`,
-      'VIP dinner transfers and inter-hotel shuttle requirements for senior attendees',
-    ];
+    // Transport/outreach narrative genuinely depends on what kind of event
+    // this is — a sports fixture doesn't have "keynote speakers", a festival
+    // doesn't have "delegates". Branch by eventType instead of writing one
+    // conference-flavoured template over every event.
+    const isSporting = data.eventType === 'SPORTING_EVENT';
+    const isPerformance = data.eventType === 'GALA_DINNER' || data.eventType === 'VIP_GATHERING';
+    const isCommunity = data.eventType === 'VIP_GATHERING' && attendance < 500;
+
+    const attendeeNoun = isSporting ? 'spectators' : isPerformance ? 'guests' : 'delegates';
+
+    const transportSignals = isSporting
+      ? [
+          `Estimated ${attendance.toLocaleString()} spectators attending at ${data.venueName}`,
+          `Corporate box holders, sponsors and team officials requiring premium match-day transfers`,
+          'Pre/post-match group shuttles from CBD hotels to venue and return',
+        ]
+      : isPerformance
+      ? [
+          `Estimated ${attendance.toLocaleString()} guests attending at ${data.venueName}`,
+          `VIP guest and performer/talent transfers to and from the venue`,
+          'Group shuttles for guests travelling from hotels or after-parties',
+        ]
+      : [
+          `Estimated ${attendance.toLocaleString()} delegates convening at ${data.venueName}`,
+          `Keynote speakers and VIP delegates arriving via ${city} Airport requiring flight tracking`,
+          'VIP dinner transfers and inter-hotel shuttle requirements for senior attendees',
+        ];
 
     const evidenceSources: EvidenceSource[] = [
       {
@@ -52,17 +74,27 @@ export class EventIntelligenceEngine {
       },
     ];
 
-    const whyRelevant = `Upcoming ${data.eventType.toLowerCase().replace('_', ' ')} with ~${attendance.toLocaleString()} attendees at ${data.venueName}. Significant demand for VIP speaker airport transfers, executive group vans (Mercedes V-Class), and punctual delegate transit.`;
+    const whyRelevant = isSporting
+      ? `Upcoming sporting event with ~${attendance.toLocaleString()} spectators at ${data.venueName}. Demand for corporate box/sponsor transfers, team and officials logistics, and pre/post-match group shuttles.`
+      : isPerformance
+      ? `Upcoming ${data.eventType.toLowerCase().replace('_', ' ')} with ~${attendance.toLocaleString()} guests at ${data.venueName}. Demand for VIP guest transfers and group shuttles to/from the venue.`
+      : `Upcoming ${data.eventType.toLowerCase().replace('_', ' ')} with ~${attendance.toLocaleString()} attendees at ${data.venueName}. Significant demand for VIP speaker airport transfers, executive group vans (Mercedes V-Class), and punctual delegate transit.`;
 
-    const recommendedServices = [
-      'Corporate Event & Conference Transfers',
-      'VIP & Luxury Private Transportation',
-      'Group Transfers & Luxury People Movers',
-    ];
+    const recommendedServices = isSporting
+      ? ['Corporate Event & Conference Transfers', 'Group Transfers & Luxury People Movers', 'VIP & Luxury Private Transportation']
+      : [
+          'Corporate Event & Conference Transfers',
+          'VIP & Luxury Private Transportation',
+          'Group Transfers & Luxury People Movers',
+        ];
 
-    const outreachAngle = `Offering dedicated VIP speaker airport arrivals with flight tracking and luxury Mercedes V-Class group shuttles for ${data.name} organizers.`;
+    const outreachAngle = isSporting
+      ? `Offering corporate box and sponsor match-day transfers, plus group shuttles for ${data.name}.`
+      : isPerformance
+      ? `Offering VIP guest transfers and group shuttles for ${data.name}.`
+      : `Offering dedicated VIP speaker airport arrivals with flight tracking and luxury Mercedes V-Class group shuttles for ${data.name} organizers.`;
 
-    const summary = `${data.name} is a major ${data.eventType.toLowerCase().replace('_', ' ')} hosted at ${data.venueName} in ${city}. Expected attendance of ~${attendance.toLocaleString()} attendees creates immediate high-value transport logistics opportunities for keynote speakers and corporate delegations.`;
+    const summary = `${data.name} is a ${data.eventType.toLowerCase().replace('_', ' ')} hosted at ${data.venueName} in ${city}. Expected attendance of ~${attendance.toLocaleString()} ${attendeeNoun} creates transport logistics opportunities${isCommunity ? ', though scale is modest' : ''}.`;
 
     return {
       score,

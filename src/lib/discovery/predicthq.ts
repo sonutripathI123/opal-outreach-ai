@@ -41,7 +41,10 @@ export interface PredictHqEvent {
 }
 
 const USER_AGENT = 'OpalOutreachAI/1.0 (event discovery; contact: book@opalchauffeurs.com.au)';
-const RELEVANT_CATEGORIES = 'conferences,expos,festivals,performing-arts,sports,community';
+// "community" is deliberately excluded — it mostly surfaces small local
+// events (street fairs, markets, fun runs) with little genuine chauffeur/VIP
+// transport demand.
+const RELEVANT_CATEGORIES = 'conferences,expos,festivals,performing-arts,sports';
 
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
   const controller = new AbortController();
