@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { X, Bell, CheckCircle2, Calendar, Building2, AlertTriangle, ArrowRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Bell, CheckCircle2, Calendar, Building2, AlertTriangle, ArrowRight, Mail, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 interface NotificationDrawerProps {
@@ -10,45 +10,78 @@ interface NotificationDrawerProps {
   onMarkAllRead: () => void;
 }
 
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+const ICONS: Record<string, { icon: any; color: string }> = {
+  HIGH_PRIORITY_COMPANY: { icon: Building2, color: 'text-emerald-400' },
+  HIGH_PRIORITY_EVENT: { icon: Calendar, color: 'text-sky-400' },
+  CONTACT_FOUND: { icon: Building2, color: 'text-emerald-400' },
+  DRAFT_READY: { icon: CheckCircle2, color: 'text-amber-400' },
+  REPLY_RECEIVED: { icon: Mail, color: 'text-emerald-400' },
+  FOLLOW_UP_DUE: { icon: Clock, color: 'text-amber-400' },
+  JOB_COMPLETED: { icon: CheckCircle2, color: 'text-emerald-400' },
+  JOB_ERROR: { icon: AlertTriangle, color: 'text-red-400' },
+};
+
+function timeAgo(dateStr: string): string {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   isOpen,
   onClose,
   onMarkAllRead,
 }) => {
-  if (!isOpen) return null;
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const notifications = [
-    {
-      id: 'notif-1',
-      title: 'New Outreach Draft Ready for Approval',
-      message: 'Personalized email drafted for Sarah Jenkins (Telstra Enterprise Solutions). Opportunity score: 92/100.',
-      time: '12m ago',
-      type: 'DRAFT_READY',
-      href: '/review',
-      icon: CheckCircle2,
-      iconColor: 'text-amber-400',
-    },
-    {
-      id: 'notif-2',
-      title: 'High-Priority Event Detected at MCEC',
-      message: 'Asia-Pacific Mining & Energy Leadership Summit (2,800 delegates) requires VIP speaker transfers.',
-      time: '45m ago',
-      type: 'EVENT',
-      href: '/events',
-      icon: Calendar,
-      iconColor: 'text-sky-400',
-    },
-    {
-      id: 'notif-3',
-      title: 'King & Wood Mallesons Melbourne Qualified',
-      message: 'Top-tier law firm at Collins Arch scored 88.5/100. Partner travel and airport demand detected.',
-      time: '2h ago',
-      type: 'COMPANY',
-      href: '/companies',
-      icon: Building2,
-      iconColor: 'text-emerald-400',
-    },
-  ];
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch notifications:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) fetchNotifications();
+  }, [isOpen]);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'MARK_ALL_READ' }),
+      });
+    } catch (e) {
+      console.error('Failed to mark notifications read:', e);
+    }
+    onMarkAllRead();
+    fetchNotifications();
+  };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -65,7 +98,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={onMarkAllRead}
+              onClick={handleMarkAllRead}
               className="text-xs text-amber-400 hover:text-amber-300 font-medium px-2 py-1"
             >
               Mark all read
@@ -81,38 +114,53 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
         {/* Notifications List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {notifications.map((n) => {
-            const Icon = n.icon;
-            return (
-              <Link
-                key={n.id}
-                href={n.href}
-                onClick={onClose}
-                className="block p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-amber-500/40 hover:bg-slate-950 transition-all group"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 mt-0.5">
-                    <Icon className={`w-4 h-4 ${n.iconColor}`} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="text-xs font-semibold text-slate-200 group-hover:text-amber-300 transition-colors">
-                        {n.title}
-                      </h4>
-                      <span className="text-[10px] text-slate-500">{n.time}</span>
+          {loading ? (
+            <div className="text-center text-xs text-slate-500 py-8">Loading...</div>
+          ) : notifications.length === 0 ? (
+            <div className="text-center text-xs text-slate-500 py-8">
+              <Bell className="w-8 h-8 mx-auto mb-2 text-slate-700" />
+              No notifications yet.
+            </div>
+          ) : (
+            notifications.map((n) => {
+              const { icon: Icon, color } = ICONS[n.type] || { icon: Bell, color: 'text-slate-400' };
+              return (
+                <Link
+                  key={n.id}
+                  href={n.linkUrl || '#'}
+                  onClick={onClose}
+                  className={`block p-4 rounded-xl border transition-all group ${
+                    n.isRead
+                      ? 'bg-slate-950/40 border-slate-800/60 opacity-70'
+                      : 'bg-slate-950/60 border-slate-800/80 hover:border-amber-500/40 hover:bg-slate-950'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 mt-0.5">
+                      <Icon className={`w-4 h-4 ${color}`} />
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed mb-2">
-                      {n.message}
-                    </p>
-                    <div className="flex items-center gap-1 text-[11px] font-medium text-amber-400">
-                      <span>View in dashboard</span>
-                      <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="text-xs font-semibold text-slate-200 group-hover:text-amber-300 transition-colors">
+                          {n.title}
+                        </h4>
+                        <span className="text-[10px] text-slate-500">{timeAgo(n.createdAt)}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed mb-2">
+                        {n.message}
+                      </p>
+                      {n.linkUrl && (
+                        <div className="flex items-center gap-1 text-[11px] font-medium text-amber-400">
+                          <span>View in dashboard</span>
+                          <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              </Link>
-            );
-          })}
+                </Link>
+              );
+            })
+          )}
         </div>
 
         {/* Footer */}

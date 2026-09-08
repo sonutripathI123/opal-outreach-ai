@@ -16,7 +16,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
   const [timeStr, setTimeStr] = useState<string>('');
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(3);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [aiActive, setAiActive] = useState<boolean | null>(null);
 
   useEffect(() => {
     const updateTime = () => {
@@ -35,6 +36,34 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await fetch('/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (e) {
+      console.error('Failed to fetch unread notifications:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    fetch('/api/settings/ai-status')
+      .then((res) => (res.ok ? res.json() : { active: false }))
+      .then((data) => setAiActive(Boolean(data.active)))
+      .catch(() => setAiActive(false));
+
+    const interval = setInterval(fetchUnreadCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCloseNotif = () => {
+    setIsNotifOpen(false);
+    fetchUnreadCount();
+  };
 
   return (
     <>
@@ -72,12 +101,27 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
 
         {/* Right: Quick Stats & Notification Center */}
         <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* AI Status Badge */}
-          <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-300">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="font-semibold hidden sm:inline">Claude 3.5 AI</span>
-            <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-black bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-300">
-              ACTIVE
+          {/* AI Status Badge - reflects whether a real Anthropic API key is configured */}
+          <div
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs ${
+              aiActive
+                ? 'bg-amber-950/30 border-amber-500/30 text-amber-300'
+                : 'bg-slate-900 border-slate-700 text-slate-400'
+            }`}
+            title={aiActive ? 'Anthropic Claude API key configured' : 'No AI key configured — using template fallback'}
+          >
+            <Sparkles className={`w-3.5 h-3.5 shrink-0 ${aiActive ? 'text-amber-400' : 'text-slate-500'}`} />
+            <span className="font-semibold hidden sm:inline">Claude AI</span>
+            <span
+              className={`text-[9px] sm:text-[10px] uppercase tracking-wider font-black px-1.5 py-0.5 rounded ${
+                aiActive === null
+                  ? 'bg-slate-700/40 text-slate-400'
+                  : aiActive
+                  ? 'bg-amber-500/20 text-amber-300'
+                  : 'bg-slate-700/40 text-slate-400'
+              }`}
+            >
+              {aiActive === null ? 'CHECKING' : aiActive ? 'ACTIVE' : 'TEMPLATE MODE'}
             </span>
           </div>
 
@@ -99,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
 
       <NotificationDrawer
         isOpen={isNotifOpen}
-        onClose={() => setIsNotifOpen(false)}
+        onClose={handleCloseNotif}
         onMarkAllRead={() => setUnreadCount(0)}
       />
     </>
