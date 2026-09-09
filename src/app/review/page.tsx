@@ -136,7 +136,7 @@ export default function ReviewPage() {
             {filteredDrafts.map((draft) => {
               const isCompany = Boolean(draft.company);
               const entity = draft.company || draft.event;
-              const score = entity?.opportunityScore || 85;
+              const score = entity?.opportunityScore ?? 0;
 
               return (
                 <div

@@ -193,7 +193,7 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
           {/* Top Banner: Score & Verification Header */}
           <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <ScoreGauge score={entity.opportunityScore || 85} size="md" />
+              <ScoreGauge score={entity.opportunityScore ?? 0} size="md" />
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-slate-100">{entity.name}</span>
@@ -390,7 +390,7 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
                   <span>Why this opportunity is relevant to Opal Chauffeurs</span>
                 </div>
                 <p className="text-xs text-slate-200 leading-relaxed font-medium">
-                  {opportunity?.whyRelevant || 'High corporate activity and flight-tracking transport requirement detected.'}
+                  {opportunity?.whyRelevant || 'Relevance rationale not yet generated for this record.'}
                 </p>
               </div>
 
@@ -400,7 +400,7 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
                   AI Research Dossier & Operations Overview
                 </div>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  {research?.summary || 'Operations and corporate travel signals verified.'}
+                  {research?.summary || 'No research summary recorded for this record.'}
                 </p>
               </div>
 
@@ -487,7 +487,7 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-500">Official business website and registry verified.</div>
+                  <div className="text-xs text-slate-500">No public evidence sources recorded for this record.</div>
                 )}
               </div>
             </div>
