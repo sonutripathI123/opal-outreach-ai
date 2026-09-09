@@ -770,9 +770,25 @@ export default function CompaniesPage() {
                                     : `"${item.name}" imported (no website on record — add a domain to enrich emails).`);
                                   fetchCompanies();
                                   setTimeout(() => setRadarSuccessMsg(null), 5000);
+                                } else {
+                                  const errData = await res.json().catch(() => ({}));
+                                  if (res.status === 409) {
+                                    // Hunter's own domain-search step already
+                                    // created this company (it does that even
+                                    // when it finds zero verified emails) —
+                                    // this duplicate-conflict isn't a real
+                                    // failure, so refresh instead of going
+                                    // silent about it.
+                                    setRadarSuccessMsg(`"${item.name}" is already in your company list (added earlier — check Corporate Companies).`);
+                                    fetchCompanies();
+                                    setTimeout(() => setRadarSuccessMsg(null), 5000);
+                                  } else {
+                                    alert(errData.error || `Failed to import "${item.name}"`);
+                                  }
                                 }
-                              } catch (e) {
+                              } catch (e: any) {
                                 console.error(e);
+                                alert(e.message || `Error importing "${item.name}"`);
                               } finally {
                                 setRadarImportingDomain(null);
                               }
