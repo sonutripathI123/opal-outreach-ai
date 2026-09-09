@@ -1,4 +1,5 @@
 import { ReplyIntent } from '@/types';
+import { AIClient } from './client';
 
 export interface ReplyAnalysisResult {
   classification: ReplyIntent;
@@ -6,9 +7,111 @@ export interface ReplyAnalysisResult {
   detectedIntent: string;
   suggestedAction: string;
   draftedReply: string;
+  analyzedBy?: 'AI' | 'KEYWORD_MATCH';
 }
 
+const VALID_CLASSIFICATIONS: ReplyIntent[] = [
+  'MEETING_REQUEST',
+  'PRICING_REQUESTED',
+  'MORE_INFO_REQUESTED',
+  'NOT_INTERESTED',
+  'INTERESTED',
+];
+
 export class ReplyAnalyzer {
+  /**
+   * Real Claude-powered reply classification. Falls back to the keyword
+   * heuristic below when no API key is configured or the call fails/returns
+   * invalid output — callers never break, but this is the path that should
+   * be used wherever the UI claims "Claude AI" classified the reply.
+   */
+  static async analyzeSmart(
+    replyText: string,
+    context?: { companyName?: string; contactName?: string }
+  ): Promise<ReplyAnalysisResult> {
+    const fallback = () => ({ ...this.analyze(replyText, context), analyzedBy: 'KEYWORD_MATCH' as const });
+
+    try {
+      const apiKey = await AIClient.getApiKey();
+      if (!apiKey) return fallback();
+
+      const contactName = context?.contactName?.split(' ')[0] || 'there';
+      const companyName = context?.companyName || 'their team';
+
+      const systemPrompt = `You are a sales reply classifier for Opal Chauffeurs, a Melbourne executive chauffeur company. Classify inbound prospect email replies to our cold outreach and draft a short professional response. Return ONLY a valid JSON object — no markdown, no commentary.`;
+
+      const userPrompt = `Classify this reply text and draft a response.
+
+REPLY FROM: ${contactName} at ${companyName}
+REPLY TEXT:
+"""
+${replyText}
+"""
+
+Return JSON with this exact shape:
+{
+  "classification": "MEETING_REQUEST" | "PRICING_REQUESTED" | "MORE_INFO_REQUESTED" | "NOT_INTERESTED" | "INTERESTED",
+  "executiveSummary": "string (1 sentence, for an executive skimming the inbox)",
+  "detectedIntent": "string (1 short sentence on what the prospect actually wants)",
+  "suggestedAction": "string (1 short sentence on the recommended next step)",
+  "draftedReply": "string (a warm, professional reply from Opal Chauffeurs' Corporate Partnerships Team, addressed to ${contactName}, ending with 'Warm regards,\\nCorporate Partnerships Team | Opal Chauffeurs')"
+}`;
+
+      const res = await AIClient.complete({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.3,
+        maxTokens: 700,
+        responseFormat: 'json',
+      });
+
+      // Only accept genuine Claude output — never the hardcoded synthesized
+      // fallback engine, which would otherwise masquerade as a real
+      // classification.
+      if (res.provider !== 'anthropic-claude') return fallback();
+
+      const parsed = this.parseJson(res.content);
+      if (
+        !parsed ||
+        !VALID_CLASSIFICATIONS.includes(parsed.classification) ||
+        !parsed.draftedReply
+      ) {
+        return fallback();
+      }
+
+      return {
+        classification: parsed.classification,
+        executiveSummary: String(parsed.executiveSummary || ''),
+        detectedIntent: String(parsed.detectedIntent || ''),
+        suggestedAction: String(parsed.suggestedAction || ''),
+        draftedReply: String(parsed.draftedReply),
+        analyzedBy: 'AI',
+      };
+    } catch (err) {
+      console.warn('AI reply analysis failed, using keyword-match fallback:', err);
+      return fallback();
+    }
+  }
+
+  private static parseJson(text: string): any | null {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {}
+    const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch {}
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {}
+    }
+    return null;
+  }
+
+  /** Deterministic keyword-based classification — used only as a fallback. */
   static analyze(replyText: string, context?: { companyName?: string; contactName?: string }): ReplyAnalysisResult {
     const text = replyText.toLowerCase();
     const contactName = context?.contactName?.split(' ')[0] || 'there';

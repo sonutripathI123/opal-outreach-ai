@@ -113,29 +113,10 @@ export default function InboxPage() {
     }
   });
 
-  // Fallback defaults if database is brand new
-  if (prospectOptions.length === 0) {
-    prospectOptions.push(
-      {
-        key: 'default_elena',
-        id: 'draft-event-mining-1',
-        type: 'DRAFT',
-        label: 'Elena Rostova (Global Energy Expos / MCEC South Wharf) - VIP Speaker Transportation',
-      },
-      {
-        key: 'default_marcus',
-        id: 'draft-kwm-1',
-        type: 'DRAFT',
-        label: 'Marcus Vance (King & Wood Mallesons / Collins Arch) - Executive Chauffeur Services',
-      },
-      {
-        key: 'default_sarah',
-        id: 'draft-crown-1',
-        type: 'DRAFT',
-        label: 'Sarah Jenkins (Crown Melbourne / Southbank) - VIP Guest Transportation',
-      }
-    );
-  }
+  // No fabricated placeholder prospects here — if there are no real sent
+  // emails or drafts yet, the dropdown is genuinely empty and the form
+  // below disables submission rather than offering fictional names that
+  // would only fail against the database.
 
   // Set default selection if none selected
   useEffect(() => {
@@ -418,13 +399,18 @@ export default function InboxPage() {
               value={simForm.selectedKey || (prospectOptions[0]?.key ?? '')}
               onChange={(e) => setSimForm({ ...simForm, selectedKey: e.target.value })}
               required
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+              disabled={prospectOptions.length === 0}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500 disabled:opacity-50"
             >
-              {prospectOptions.map((opt) => (
-                <option key={opt.key} value={opt.key}>
-                  {opt.label}
-                </option>
-              ))}
+              {prospectOptions.length === 0 ? (
+                <option value="">No sent emails or drafts yet — send an outreach email first</option>
+              ) : (
+                prospectOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -474,7 +460,7 @@ export default function InboxPage() {
             </button>
             <button
               type="submit"
-              disabled={simulating}
+              disabled={simulating || prospectOptions.length === 0}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
             >
               {simulating ? <RotateCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}

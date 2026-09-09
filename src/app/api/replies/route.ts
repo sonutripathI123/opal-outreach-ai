@@ -97,8 +97,9 @@ export async function POST(req: NextRequest) {
     const finalSenderEmail = senderEmail || targetSentEmail.recipientEmail;
     const finalSubject = subject || `Re: ${targetSentEmail.subject}`;
 
-    // Run AI Reply Analysis & Intent Classification
-    const analysis = ReplyAnalyzer.analyze(bodyText, {
+    // Run AI Reply Analysis & Intent Classification (real Claude call, with
+    // an automatic keyword-match fallback if no API key / call fails).
+    const analysis = await ReplyAnalyzer.analyzeSmart(bodyText, {
       companyName: targetCompName,
       contactName: recipientDisplayName,
     });
