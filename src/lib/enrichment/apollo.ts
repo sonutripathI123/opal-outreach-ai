@@ -158,30 +158,30 @@ export class ApolloPoolManager {
           const data = await res.json();
           const people = data.people || [];
 
-          if (people.length > 0) {
-            // Find person with verified email or first relevant match
-            const person = people.find((p: any) => p.email && p.email_status === 'verified') || people[0];
+          // Only ever return a person Apollo actually gave us a real email
+          // for — never fabricate a "contact@domain.com" guess, which would
+          // bounce and damage sender reputation.
+          const person = people.find((p: any) => p.email && p.email_status === 'verified') || people.find((p: any) => p.email);
 
-            if (person) {
-              // Update credit usage
-              keyEntry.creditsUsed = (keyEntry.creditsUsed || 0) + 1;
-              keyEntry.lastUsedAt = new Date().toISOString();
-              await this.savePool(pool);
+          if (person?.email) {
+            // Update credit usage
+            keyEntry.creditsUsed = (keyEntry.creditsUsed || 0) + 1;
+            keyEntry.lastUsedAt = new Date().toISOString();
+            await this.savePool(pool);
 
-              return {
-                fullName: person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim(),
-                firstName: person.first_name,
-                lastName: person.last_name,
-                jobTitle: person.title || 'Corporate Operations & Travel Contact',
-                department: person.departments?.[0] || 'Operations',
-                email: person.email || `contact@${domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]}`,
-                emailConfidence: person.email_status === 'verified' ? 0.95 : 0.82,
-                verificationStatus: person.email_status === 'verified' ? 'VERIFIED' : 'LIKELY',
-                linkedinUrl: person.linkedin_url || '',
-                phone: person.phone_numbers?.[0]?.sanitized_number || '',
-                apolloKeyUsedName: keyEntry.name,
-              };
-            }
+            return {
+              fullName: person.name || `${person.first_name || ''} ${person.last_name || ''}`.trim(),
+              firstName: person.first_name,
+              lastName: person.last_name,
+              jobTitle: person.title || 'Corporate Operations & Travel Contact',
+              department: person.departments?.[0] || 'Operations',
+              email: person.email,
+              emailConfidence: person.email_status === 'verified' ? 0.95 : 0.82,
+              verificationStatus: person.email_status === 'verified' ? 'VERIFIED' : 'LIKELY',
+              linkedinUrl: person.linkedin_url || '',
+              phone: person.phone_numbers?.[0]?.sanitized_number || '',
+              apolloKeyUsedName: keyEntry.name,
+            };
           }
         }
       } catch (err: any) {
@@ -262,7 +262,7 @@ export class ApolloPoolManager {
     if (!name || !domain) return null;
 
     const employees = Number(o.estimated_num_employees) || 0;
-    let size = 'Medium (50-200)';
+    let size = 'Unknown';
     if (employees >= 1000) size = 'Enterprise (1000+)';
     else if (employees >= 200) size = 'Large (200-1000)';
     else if (employees >= 50) size = 'Medium (50-200)';

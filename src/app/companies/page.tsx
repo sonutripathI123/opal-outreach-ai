@@ -727,7 +727,7 @@ export default function CompaniesPage() {
                                     headquartersAddress: item.address,
                                     city: 'Melbourne',
                                     state: 'VIC',
-                                    approximateSize: item.size && item.size !== 'Unknown' ? item.size : 'Large (200-1000)',
+                                    approximateSize: item.size || 'Unknown',
                                     contactName: 'Director of Operations',
                                     contactRole: item.targetRoles?.[0] || 'Head of Executive Travel',
                                   }),

@@ -182,78 +182,88 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const finalContactName = apolloContact?.fullName || contactName || 'Executive Operations Desk';
-    const finalContactRole = apolloContact?.jobTitle || contactRole || 'Head of Executive Operations & Corporate Travel';
-    const finalContactEmail = apolloContact?.email || contactEmail || `travel@${company.domain || 'company.com.au'}`;
-    const emailSource = apolloContact ? 'APOLLO_IO_VERIFIED' : contactEmail ? 'MANUAL_ENTRY' : 'SYNTHESIZED_ROLE';
-    const emailConfidence = apolloContact ? apolloContact.emailConfidence : contactEmail ? 0.95 : 0.8;
-    const verificationStatus = apolloContact ? apolloContact.verificationStatus : contactEmail ? 'VERIFIED' : 'LIKELY';
+    // We never fabricate a "travel@domain.com" guess when no real email is
+    // known — sending to an invented address bounces and harms sender
+    // reputation. The company is still saved for tracking; contact/draft
+    // creation is skipped until a real email is found (Apollo or manual).
+    const finalContactEmail = apolloContact?.email || contactEmail || null;
 
-    const contact = await prisma.contact.create({
-      data: {
-        companyId: company.id,
-        fullName: finalContactName,
-        firstName: apolloContact?.firstName || finalContactName.split(' ')[0],
-        lastName: apolloContact?.lastName || finalContactName.split(' ').slice(1).join(' '),
-        jobTitle: finalContactRole,
-        department: apolloContact?.department || 'Corporate Travel / Operations',
-        seniorityLevel: 'DIRECTOR',
-        email: finalContactEmail,
-        emailSource,
-        emailConfidence,
-        verificationStatus,
-        linkedinUrl: apolloContact?.linkedinUrl,
-        phone: apolloContact?.phone,
-        isPrimaryContact: true,
-      },
-    });
+    let contact = null;
+    let draft = null;
 
-    // Fetch Business Profile for 2-layer email drafting
-    const profile = await prisma.businessProfile.findFirst();
-    const bProfile = profile || {
-      companyName: 'Opal Chauffeurs',
-      tradingName: 'Opal Chauffeurs',
-      website: 'https://www.opalchauffeurs.com.au/',
-      description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
-      brandPositioning: 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-      emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
-      collaborationOffer: 'Introducing Opal Chauffeurs as your corporate transport partner.',
-    };
+    if (finalContactEmail) {
+      const finalContactName = apolloContact?.fullName || contactName || 'Executive Operations Desk';
+      const finalContactRole = apolloContact?.jobTitle || contactRole || 'Head of Executive Operations & Corporate Travel';
+      const emailSource = apolloContact ? 'APOLLO_IO_VERIFIED' : 'MANUAL_ENTRY';
+      const emailConfidence = apolloContact ? apolloContact.emailConfidence : 0.95;
+      const verificationStatus = apolloContact ? apolloContact.verificationStatus : 'VERIFIED';
 
-    // Generate 2-Layer Personalized Outreach Draft
-    const draftContent = await EmailGenerator.generateEmailSmart({
-      businessProfile: bProfile,
-      recipient: {
-        name: contact.fullName,
-        role: contact.jobTitle,
-        companyName: company.name,
-        email: contact.email,
-      },
-      context: {
-        type: 'COMPANY',
-        industry: company.industry,
-        location: company.city,
-        whyRelevant: analysis.whyRelevant,
-        recommendedServices: analysis.recommendedServices,
-      },
-    });
+      contact = await prisma.contact.create({
+        data: {
+          companyId: company.id,
+          fullName: finalContactName,
+          firstName: apolloContact?.firstName || finalContactName.split(' ')[0],
+          lastName: apolloContact?.lastName || finalContactName.split(' ').slice(1).join(' '),
+          jobTitle: finalContactRole,
+          department: apolloContact?.department || 'Corporate Travel / Operations',
+          seniorityLevel: 'DIRECTOR',
+          email: finalContactEmail,
+          emailSource,
+          emailConfidence,
+          verificationStatus,
+          linkedinUrl: apolloContact?.linkedinUrl,
+          phone: apolloContact?.phone,
+          isPrimaryContact: true,
+        },
+      });
 
-    const draft = await prisma.emailDraft.create({
-      data: {
-        companyId: company.id,
-        contactId: contact.id,
-        recipientName: contact.fullName,
-        recipientEmail: contact.email,
-        recipientRole: contact.jobTitle,
-        subject: draftContent.subject,
-        fixedContent: draftContent.fixedContent,
-        dynamicContent: draftContent.dynamicContent,
-        fullBodyText: draftContent.fullBodyText,
-        personalizationReasoning: draftContent.personalizationReasoning,
-        aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
-        status: 'READY_FOR_REVIEW',
-      },
-    });
+      // Fetch Business Profile for 2-layer email drafting
+      const profile = await prisma.businessProfile.findFirst();
+      const bProfile = profile || {
+        companyName: 'Opal Chauffeurs',
+        tradingName: 'Opal Chauffeurs',
+        website: 'https://www.opalchauffeurs.com.au/',
+        description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
+        brandPositioning: 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
+        emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
+        collaborationOffer: 'Introducing Opal Chauffeurs as your corporate transport partner.',
+      };
+
+      // Generate 2-Layer Personalized Outreach Draft
+      const draftContent = await EmailGenerator.generateEmailSmart({
+        businessProfile: bProfile,
+        recipient: {
+          name: contact.fullName,
+          role: contact.jobTitle,
+          companyName: company.name,
+          email: contact.email,
+        },
+        context: {
+          type: 'COMPANY',
+          industry: company.industry,
+          location: company.city,
+          whyRelevant: analysis.whyRelevant,
+          recommendedServices: analysis.recommendedServices,
+        },
+      });
+
+      draft = await prisma.emailDraft.create({
+        data: {
+          companyId: company.id,
+          contactId: contact.id,
+          recipientName: contact.fullName,
+          recipientEmail: contact.email,
+          recipientRole: contact.jobTitle,
+          subject: draftContent.subject,
+          fixedContent: draftContent.fixedContent,
+          dynamicContent: draftContent.dynamicContent,
+          fullBodyText: draftContent.fullBodyText,
+          personalizationReasoning: draftContent.personalizationReasoning,
+          aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
+          status: 'READY_FOR_REVIEW',
+        },
+      });
+    }
 
     // Log Activity & Notification
     await logActivity({
@@ -261,7 +271,7 @@ export async function POST(req: NextRequest) {
       entityType: 'COMPANY',
       entityId: company.id,
       actor: 'ADMIN_USER',
-      description: `Discovered and qualified ${company.name} (Score: ${company.opportunityScore}/100, Priority: ${company.priority}).`,
+      description: `Discovered and qualified ${company.name} (Score: ${company.opportunityScore}/100, Priority: ${company.priority}).${contact ? '' : ' No verified contact email found — add one manually before drafting outreach.'}`,
       details: { score: company.opportunityScore, priority: company.priority },
     });
 
@@ -269,7 +279,9 @@ export async function POST(req: NextRequest) {
       await createNotification({
         type: 'HIGH_PRIORITY_COMPANY',
         title: `High-Priority Enterprise Discovered: ${company.name}`,
-        message: `${company.name} scored ${company.opportunityScore}/100. Outreach draft is waiting for your review.`,
+        message: contact
+          ? `${company.name} scored ${company.opportunityScore}/100. Outreach draft is waiting for your review.`
+          : `${company.name} scored ${company.opportunityScore}/100. No verified contact email found yet — add one to generate an outreach draft.`,
         linkUrl: '/review',
       });
     }
