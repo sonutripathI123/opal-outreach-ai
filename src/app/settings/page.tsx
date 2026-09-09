@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Mail,
   Send,
+  MapPin,
 } from 'lucide-react';
 
 interface ApolloKeyItem {
@@ -53,6 +54,11 @@ export default function SettingsPage() {
   const [testEmailRecipient, setTestEmailRecipient] = useState('sonutripathi9305@gmail.com');
   const [testingEmail, setTestingEmail] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Google Places API Key (company discovery source)
+  const [googlePlacesApiKey, setGooglePlacesApiKey] = useState('');
+  const [testingGooglePlaces, setTestingGooglePlaces] = useState(false);
+  const [testGooglePlacesResult, setTestGooglePlacesResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Apollo Key Pool State
   const [apolloPool, setApolloPool] = useState<ApolloKeyItem[]>([]);
@@ -103,6 +109,11 @@ export default function SettingsPage() {
         const keySetting = settingsList.find((s: any) => s.key === 'anthropic_api_key');
         if (keySetting?.value) {
           setApiKey(keySetting.value);
+        }
+
+        const googlePlacesSetting = settingsList.find((s: any) => s.key === 'google_maps_api_key');
+        if (googlePlacesSetting?.value) {
+          setGooglePlacesApiKey(googlePlacesSetting.value);
         }
 
         const aiParams = settingsList.find((s: any) => s.key === 'ai_engine_parameters');
@@ -176,6 +187,27 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  const handleTestGooglePlaces = async () => {
+    setTestingGooglePlaces(true);
+    setTestGooglePlacesResult(null);
+    try {
+      const res = await fetch('/api/settings/test-google-places', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: googlePlacesApiKey }),
+      });
+      const data = await res.json();
+      setTestGooglePlacesResult({
+        success: Boolean(data.success),
+        message: data.message || data.error || 'Failed to verify Google Places API key.',
+      });
+    } catch (err: any) {
+      setTestGooglePlacesResult({ success: false, message: err.message || 'Error testing Google Places API key.' });
+    } finally {
+      setTestingGooglePlaces(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     setTestingAi(true);
@@ -364,6 +396,16 @@ export default function SettingsPage() {
             },
             category: 'EMAIL_CONFIG',
             description: 'Outgoing Email Dispatch Configuration (Brevo REST API & SMTP)',
+          }),
+        }),
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'google_maps_api_key',
+            value: googlePlacesApiKey.trim(),
+            category: 'AI_CONFIG',
+            description: 'Google Places API Key (company discovery)',
           }),
         }),
         fetch('/api/settings', {
@@ -737,6 +779,62 @@ export default function SettingsPage() {
               {testingEmail ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
               <span>{testingEmail ? 'Sending Test...' : 'Send Test Email'}</span>
             </button>
+          </div>
+        </div>
+
+        {/* SECTION 2.5: Google Places API (company discovery source) */}
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <MapPin className="w-5 h-5 text-amber-400" />
+              <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+                Google Places API (Company Discovery Source)
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestGooglePlaces}
+              disabled={testingGooglePlaces || !googlePlacesApiKey}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              {testingGooglePlaces ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>{testingGooglePlaces ? 'Testing...' : 'Test Key'}</span>
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400">
+            Adds real local business listings (Google Places, new API) as a source for the Location Radar and automated company discovery, alongside Apollo.io and OpenStreetMap. Requires a Google Cloud API key with &ldquo;Places API (New)&rdquo; enabled and billing active.
+          </p>
+
+          {testGooglePlacesResult && (
+            <div
+              className={`p-3.5 rounded-2xl text-xs font-semibold flex items-start gap-2.5 ${
+                testGooglePlacesResult.success
+                  ? 'bg-emerald-950/50 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/50 border border-rose-500/40 text-rose-300'
+              }`}
+            >
+              {testGooglePlacesResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <span>{testGooglePlacesResult.message}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Google Places API Key</label>
+            <div className="relative">
+              <Key className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+              <input
+                type="password"
+                value={googlePlacesApiKey}
+                onChange={(e) => setGooglePlacesApiKey(e.target.value)}
+                placeholder="AIza..."
+                className="w-full pl-10 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:border-amber-500 focus:outline-none"
+              />
+            </div>
           </div>
         </div>
 

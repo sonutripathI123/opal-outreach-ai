@@ -45,6 +45,9 @@ export async function discoverCompaniesForActiveLocations(): Promise<CompanyDisc
     notes.push('Hunter API key not configured — new companies will be added without contacts/drafts.');
   }
 
+  const googleKeySetting = await prisma.systemSettings.findUnique({ where: { key: 'google_maps_api_key' } });
+  const googleKey = googleKeySetting?.value || process.env.GOOGLE_MAPS_API_KEY || '';
+
   const businessProfile = await prisma.businessProfile.findFirst();
   const bProfile = {
     companyName: businessProfile?.companyName || 'Opal Chauffeurs',
@@ -71,7 +74,6 @@ export async function discoverCompaniesForActiveLocations(): Promise<CompanyDisc
     }
 
     try {
-      const googleKey = process.env.GOOGLE_MAPS_API_KEY || '';
       if (googleKey) {
         candidates.push(...(await GooglePlacesClient.searchCompaniesByLocation(locationQuery, googleKey)));
       }

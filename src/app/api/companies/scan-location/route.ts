@@ -371,7 +371,8 @@ export async function POST(req: NextRequest) {
     // 0b. Live Google Places discovery (real local B2B businesses + websites).
     //     Needs GOOGLE_MAPS_API_KEY with the Places API enabled.
     try {
-      const googleKey = process.env.GOOGLE_MAPS_API_KEY || '';
+      const googleKeySetting = await prisma.systemSettings.findUnique({ where: { key: 'google_maps_api_key' } });
+      const googleKey = googleKeySetting?.value || process.env.GOOGLE_MAPS_API_KEY || '';
       if (googleKey) {
         const googleCompanies = await GooglePlacesClient.searchCompaniesByLocation(locationQuery.trim(), googleKey);
         if (googleCompanies.length > 0) {

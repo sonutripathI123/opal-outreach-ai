@@ -35,6 +35,33 @@ function toDomain(websiteUri?: string): string {
 }
 
 export class GooglePlacesClient {
+  /** Quick key check: a real search that should succeed for any valid key. */
+  static async verifyKey(apiKey: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey.trim(),
+          'X-Goog-FieldMask': 'places.displayName',
+        },
+        body: JSON.stringify({ textQuery: 'cafes in Melbourne', maxResultCount: 1 }),
+      });
+
+      if (res.ok) {
+        return { success: true, message: 'Google Places API key is valid and connected!' };
+      }
+
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        message: data.error?.message || `Google Places API returned HTTP ${res.status} — check the key and that "Places API (New)" is enabled with billing active.`,
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error verifying Google Places API key' };
+    }
+  }
+
   static async searchCompaniesByLocation(
     location: string,
     apiKey: string,
