@@ -198,7 +198,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               {pendingDrafts.map((d) => {
                 const entityName = d.company?.name || d.event?.name;
-                const score = d.company?.opportunityScore || d.event?.opportunityScore || 85;
+                const score = d.company?.opportunityScore ?? d.event?.opportunityScore ?? 0;
                 return (
                   <div
                     key={d.id}
