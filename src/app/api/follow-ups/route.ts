@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (action === 'SEND') {
       const followUp = await prisma.followUp.findUnique({
         where: { id: followUpId },
-        include: { sentEmail: true, contact: true },
+        include: { sentEmail: true, contact: true, company: true },
       });
 
       if (!followUp) {
@@ -58,6 +58,17 @@ export async function POST(req: NextRequest) {
 
       if (followUp.status === 'SENT') {
         return NextResponse.json({ error: 'This follow-up has already been sent' }, { status: 400 });
+      }
+
+      if (followUp.company?.status === 'DO_NOT_CONTACT') {
+        await prisma.followUp.update({
+          where: { id: followUpId },
+          data: { status: 'CANCELLED', cancelReason: 'OPT_OUT' },
+        });
+        return NextResponse.json(
+          { error: 'This company opted out / is marked Do Not Contact — follow-up cancelled instead of sent.' },
+          { status: 400 }
+        );
       }
 
       const recipientEmail = followUp.sentEmail?.recipientEmail || followUp.contact?.email;

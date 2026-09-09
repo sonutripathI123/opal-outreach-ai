@@ -21,7 +21,7 @@ export async function processDueFollowUps(
 ): Promise<FollowUpRunResult> {
   const due = await prisma.followUp.findMany({
     where: { status: 'SCHEDULED', scheduledDate: { lte: new Date() } },
-    include: { sentEmail: true, contact: true },
+    include: { sentEmail: true, contact: true, company: true },
     orderBy: { scheduledDate: 'asc' },
     take: 50,
   });
@@ -33,6 +33,17 @@ export async function processDueFollowUps(
       await prisma.followUp.update({
         where: { id: fu.id },
         data: { status: 'CANCELLED', cancelReason: 'REPLY_RECEIVED' },
+      });
+      result.cancelled++;
+      continue;
+    }
+
+    // Stop Rule 2: never chase a company that opted out / was marked Do Not
+    // Contact, even if a step was somehow left scheduled.
+    if (fu.company?.status === 'DO_NOT_CONTACT') {
+      await prisma.followUp.update({
+        where: { id: fu.id },
+        data: { status: 'CANCELLED', cancelReason: 'OPT_OUT' },
       });
       result.cancelled++;
       continue;

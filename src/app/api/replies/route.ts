@@ -129,11 +129,13 @@ export async function POST(req: NextRequest) {
       data: { hasReply: true },
     });
 
-    // Update company status if applicable
+    // Update company status if applicable. A NOT_INTERESTED reply marks the
+    // company Do Not Contact so processDueFollowUps refuses to email them
+    // again even if a future step gets rescheduled some other way.
     if (targetSentEmail.companyId) {
       await prisma.company.update({
         where: { id: targetSentEmail.companyId },
-        data: { status: 'REPLIED' },
+        data: { status: analysis.classification === 'NOT_INTERESTED' ? 'DO_NOT_CONTACT' : 'REPLIED' },
       });
     }
 
