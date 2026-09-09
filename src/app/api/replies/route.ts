@@ -81,52 +81,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Fallback: Find any existing sentEmail or draft, or create mock
+    // We never guess which sent email a reply belongs to — attaching it to
+    // an arbitrary unrelated record (or a fabricated placeholder identity)
+    // would silently misattribute client communication. Require a specific
+    // sentEmailId or draftId; otherwise fail loudly instead of faking it.
     if (!targetSentEmail) {
-      const anySent = await prisma.sentEmail.findFirst({
-        include: { company: true, contact: true, event: true },
-      });
-      if (anySent) {
-        targetSentEmail = anySent;
-      } else {
-        // Find any draft to create sent email
-        const anyDraft = await prisma.emailDraft.findFirst({
-          include: { company: true, contact: true, event: true },
-        });
-
-        if (anyDraft) {
-          targetSentEmail = await prisma.sentEmail.create({
-            data: {
-              draftId: anyDraft.id,
-              companyId: anyDraft.companyId,
-              eventId: anyDraft.eventId,
-              contactId: anyDraft.contactId,
-              recipientEmail: anyDraft.recipientEmail,
-              recipientName: anyDraft.recipientName,
-              subject: anyDraft.subject,
-              exactSentBody: anyDraft.fullBodyText,
-              deliveryStatus: 'DELIVERED',
-            },
-            include: { company: true, contact: true, event: true },
-          });
-        }
-      }
+      return NextResponse.json(
+        { error: 'No matching sent email found for sentEmailId/draftId — cannot associate this reply' },
+        { status: 400 }
+      );
     }
 
-    const recipientDisplayName = targetSentEmail?.recipientName || prospectName || 'Elena Rostova';
-    const targetCompName = targetSentEmail?.company?.name || targetSentEmail?.event?.name || companyName || 'Global Energy Expos';
-    const finalSenderEmail = senderEmail || targetSentEmail?.recipientEmail || 'elena.rostova@globalenergyexpos.com.au';
-    const finalSubject = subject || (targetSentEmail ? `Re: ${targetSentEmail.subject}` : 'Re: Executive Chauffeur Transportation');
+    const recipientDisplayName = targetSentEmail.recipientName || prospectName;
+    const targetCompName = targetSentEmail.company?.name || targetSentEmail.event?.name || companyName;
+    const finalSenderEmail = senderEmail || targetSentEmail.recipientEmail;
+    const finalSubject = subject || `Re: ${targetSentEmail.subject}`;
 
     // Run AI Reply Analysis & Intent Classification
     const analysis = ReplyAnalyzer.analyze(bodyText, {
       companyName: targetCompName,
       contactName: recipientDisplayName,
     });
-
-    if (!targetSentEmail) {
-      return NextResponse.json({ error: 'No target email found to associate reply with' }, { status: 400 });
-    }
 
     // Create Reply Record
     const reply = await prisma.reply.create({

@@ -412,7 +412,7 @@ export default function SentPage() {
                           className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
                         >
                           <Mail className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>📥 Ingest / Sync Reply</span>
+                          <span>📥 Manually Log Reply</span>
                         </button>
                       )}
 
@@ -569,8 +569,8 @@ export default function SentPage() {
         <Modal
           isOpen={isIngestModalOpen}
           onClose={() => setIsIngestModalOpen(false)}
-          title={`📥 Ingest Client Reply from ${targetSentForIngest.recipientName}`}
-          subtitle="Paste or enter the message received in Zoho Mail. AI will classify the intent, halt future follow-ups, and generate a customized response draft."
+          title={`📥 Manually Log Client Reply from ${targetSentForIngest.recipientName}`}
+          subtitle="This does NOT auto-fetch from Zoho — copy the message you received in Zoho Mail and paste it here. AI will classify the intent, halt future follow-ups, and generate a customized response draft. For automatic detection, use 'Check Zoho Inbox' above instead."
           maxWidth="lg"
         >
           <form onSubmit={handleIngestReplySubmit} className="space-y-4">
