@@ -425,7 +425,7 @@ export default function SettingsPage() {
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-white">System Settings & Integrations</h1>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              Configure Anthropic Claude, Apollo.io key rotation, official Google Workspace SMTP email delivery (<code className="text-amber-300">book@opalchauffeurs.com.au</code>), and scoring models.
+              Configure Anthropic Claude, Apollo.io key rotation, outgoing email delivery for <code className="text-amber-300">book@opalchauffeurs.com.au</code> (Brevo REST API or SMTP), and scoring models.
             </p>
           </div>
 
