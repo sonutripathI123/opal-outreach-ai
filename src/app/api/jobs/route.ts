@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity-logger';
 import { processDueFollowUps } from '@/lib/jobs/follow-ups';
 import { discoverCompaniesForActiveLocations } from '@/lib/jobs/company-discovery';
+import { discoverEventsForActiveLocations } from '@/lib/jobs/event-discovery';
 import { ZohoImapSyncEngine } from '@/lib/email/imap-sync';
 
 export async function GET() {
@@ -52,15 +53,18 @@ export async function POST(req: NextRequest) {
         resultSummary += ` Notes: ${result.notes.slice(0, 3).join(' | ')}`;
       }
     } else if (jobType === 'EVENT_DISCOVERY') {
-      // Honest limitation: there is currently no live, general-purpose
-      // "any event in Australia" data source connected (Eventbrite's public
-      // search API has been discontinued since 2020, and no free
-      // equivalent exists). Rather than fabricate a success message, say so.
-      resultSummary =
-        'No live event data source is currently connected — automatic Australia-wide event discovery is not yet configured. ' +
-        'Add events manually via "Add Custom Event", or via the curated Location Event Radar. ' +
-        'Ask your admin about connecting a real events data provider (e.g. PredictHQ) to automate this.';
-      processed = 0;
+      const result = await discoverEventsForActiveLocations();
+      processed = result.eventsImported;
+      if (result.locationsScanned === 0) {
+        // No PredictHQ key and/or no active locations — the job's notes
+        // already say which; surface that honestly instead of a fake count.
+        resultSummary = result.notes[0] || 'Event discovery did not run — see notes.';
+      } else {
+        resultSummary = `Scanned ${result.locationsScanned} active location(s) via PredictHQ. Found ${result.candidatesFound} new candidate event(s), imported ${result.eventsImported}. No organiser contacts (PredictHQ doesn't provide them) — add one per event to generate a draft.`;
+      }
+      if (result.notes.length > 0 && result.locationsScanned > 0) {
+        resultSummary += ` Notes: ${result.notes.slice(0, 3).join(' | ')}`;
+      }
     } else if (jobType === 'FOLLOW_UP_CHECK') {
       const result = await processDueFollowUps('ADMIN_USER');
       processed = result.sent;
