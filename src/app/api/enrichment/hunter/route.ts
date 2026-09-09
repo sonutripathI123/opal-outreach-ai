@@ -64,16 +64,23 @@ export async function POST(req: NextRequest) {
       });
 
       if (!company) {
+        // Hunter's domain-search API only returns emails — it has no signal
+        // on company size, industry, office count, or international
+        // presence. Those used to be hardcoded to impressive-sounding
+        // values ("Enterprise 500+", international, 2 offices) regardless
+        // of the real company, which also artificially inflated the score.
+        // Use honest "unknown" defaults instead; a human can correct these
+        // during review.
         const analysis = CorporateIntelligenceEngine.analyzeCompany({
           name: companyName,
           website: `https://${cleanDomain}`,
-          industry: 'Corporate & Financial Services',
+          industry: 'Unknown',
           city: 'Melbourne',
           state: 'VIC',
           headquartersAddress: 'Melbourne VIC, Australia',
-          approximateSize: 'Enterprise (500+)',
-          officeCount: 2,
-          internationalPresence: true,
+          approximateSize: 'Unknown',
+          officeCount: 1,
+          internationalPresence: false,
         });
 
         company = await prisma.company.create({
@@ -81,13 +88,17 @@ export async function POST(req: NextRequest) {
             name: companyName,
             website: `https://${cleanDomain}`,
             domain: cleanDomain,
-            industry: 'Corporate & Financial Services',
+            industry: 'Unknown',
             city: 'Melbourne',
             state: 'VIC',
             headquartersAddress: 'Melbourne VIC, Australia',
-            approximateSize: 'Enterprise (500+)',
-            corporateActivityLevel: 'HIGH',
-            executiveTravelLikelihood: 'HIGH',
+            approximateSize: 'Unknown',
+            // Matches the same honest fallback CorporateIntelligenceEngine
+            // uses internally for a single-office, non-international,
+            // unknown-size company — not the schema's optimistic HIGH/HIGH
+            // defaults, which would otherwise apply here unset.
+            corporateActivityLevel: 'MEDIUM',
+            executiveTravelLikelihood: 'MEDIUM',
             eventHostingLikelihood: 'MEDIUM',
             status: 'DRAFTED',
             priority: analysis.priority,
