@@ -657,6 +657,16 @@ export default function CompaniesPage() {
                         </Badge>
                       </div>
 
+                      <div className="text-[10px] font-semibold">
+                        {item.source === 'CURATED_LIST' ? (
+                          <span className="text-slate-500">📋 Curated reference list (not a live search result)</span>
+                        ) : (
+                          <span className="text-emerald-400">
+                            🟢 Live via {item.source === 'APOLLO_LIVE' ? 'Apollo.io' : item.source === 'GOOGLE_PLACES' ? 'Google Places' : 'OpenStreetMap'}
+                          </span>
+                        )}
+                      </div>
+
                       <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
                         <MapPin className="w-3 h-3 text-slate-500 shrink-0" />
                         <span className="truncate">{item.address}</span>
@@ -717,16 +727,38 @@ export default function CompaniesPage() {
                                   // creating the company so you can enrich it manually.
                                 }
 
+                                // item.domain already includes its real TLD
+                                // (e.g. "commbank.com.au") — appending
+                                // ".com.au" again produced a broken domain
+                                // like "commbank.com.au.com.au". Only
+                                // fall back to guessing a .com.au domain
+                                // when no domain was found at all.
+                                const websiteUrl = item.domain
+                                  ? `https://${item.domain}`
+                                  : `https://${item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com.au`;
+
+                                // City was previously hardcoded to Melbourne
+                                // for every imported company regardless of
+                                // where it actually is — which also
+                                // silently inflated its location score.
+                                // Derive it from the real address/suburb
+                                // instead.
+                                const OTHER_MAJOR_CITIES = ['Sydney', 'Brisbane', 'Perth', 'Adelaide', 'Canberra', 'Hobart', 'Darwin'];
+                                const addressBlob = `${item.address || ''} ${item.suburb || ''}`.toLowerCase();
+                                const derivedCity = OTHER_MAJOR_CITIES.find((c) => addressBlob.includes(c.toLowerCase())) || 'Melbourne';
+                                const stateMatch = (item.address || '').match(/\b(VIC|NSW|QLD|WA|SA|TAS|ACT|NT)\b/);
+                                const derivedState = stateMatch ? stateMatch[1] : 'VIC';
+
                                 const res = await fetch('/api/companies', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({
                                     name: item.name,
-                                    website: `https://${item.domain || item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com.au`,
+                                    website: websiteUrl,
                                     industry: item.industry,
                                     headquartersAddress: item.address,
-                                    city: 'Melbourne',
-                                    state: 'VIC',
+                                    city: derivedCity,
+                                    state: derivedState,
                                     approximateSize: item.size || 'Unknown',
                                     contactName: 'Director of Operations',
                                     contactRole: item.targetRoles?.[0] || 'Head of Executive Travel',

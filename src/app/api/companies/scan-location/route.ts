@@ -399,14 +399,17 @@ export async function POST(req: NextRequest) {
 
     const liveCount = matched.length;
 
-    // 1. Search in extended real location dictionary
+    // 1. Search in extended curated location dictionary — a hand-written
+    //    list of real companies, NOT a live search. Every item is tagged
+    //    CURATED_LIST so the UI can be honest about where it came from,
+    //    instead of presenting it as freshly discovered.
     for (const [key, comps] of Object.entries(EXTENDED_TARGET_COMPANIES)) {
       if (cleanQuery.includes(key) || key.includes(cleanQuery)) {
-        matched.push(...comps);
+        matched.push(...comps.map((c) => ({ ...c, source: 'CURATED_LIST' as const })));
       }
     }
 
-    // 2. Search in base MELBOURNE_TARGET_COMPANIES
+    // 2. Search in base MELBOURNE_TARGET_COMPANIES (also curated, not live).
     for (const comp of MELBOURNE_TARGET_COMPANIES) {
       if (
         comp.suburb.toLowerCase().includes(cleanQuery) ||
@@ -415,7 +418,7 @@ export async function POST(req: NextRequest) {
         comp.industry.toLowerCase().includes(cleanQuery)
       ) {
         if (!matched.some((m) => m.name.toLowerCase() === comp.name.toLowerCase())) {
-          matched.push(comp);
+          matched.push({ ...comp, source: 'CURATED_LIST' as const });
         }
       }
     }
