@@ -102,7 +102,7 @@ export async function discoverCompaniesForActiveLocations(): Promise<CompanyDisc
       if (!cand.domain) continue; // need a website to enrich real contacts
 
       try {
-        const size = cand.size && cand.size !== 'Unknown' ? cand.size : 'Medium (50-200)';
+        const size = cand.size || 'Unknown';
         const analysis = CorporateIntelligenceEngine.analyzeCompany({
           name: cand.name,
           website: `https://${cand.domain}`,
