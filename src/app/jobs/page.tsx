@@ -154,7 +154,7 @@ export default function JobsPage() {
                       </div>
                       <div>
                         <span className="text-slate-500">Items Processed:</span>
-                        <div className="font-bold text-amber-400">{job.itemsProcessed} total</div>
+                        <div className="font-bold text-amber-400">{job.lastRunAt ? job.itemsProcessed : '—'} (last run)</div>
                       </div>
                     </div>
                   </div>

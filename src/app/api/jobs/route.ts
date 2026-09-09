@@ -85,13 +85,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Unknown jobType: ${jobType}` }, { status: 400 });
     }
 
+    // itemsProcessed reflects THIS run, not a running lifetime total — an
+    // incrementing counter would otherwise compound forever on top of
+    // whatever value the row happened to start at (including stale/seeded
+    // data from before this job ever really ran).
     const updatedJob = await prisma.backgroundJob.update({
       where: { jobType },
       data: {
         lastRunAt: now,
         status: jobStatus,
         lastResultSummary: resultSummary,
-        itemsProcessed: { increment: processed },
+        itemsProcessed: processed,
         errorsCount: jobStatus === 'FAILED' ? { increment: 1 } : undefined,
       },
     });
