@@ -17,6 +17,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            export PATH="$PATH:$(npm config get prefix)/bin"
             cd /var/www/opal-outreach-ai
             git pull origin main
             npm install
