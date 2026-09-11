@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ScoreGauge } from '@/components/ui/ScoreGauge';
 import { Badge } from '@/components/ui/Badge';
@@ -30,6 +30,7 @@ import Link from 'next/link';
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const latestCompaniesRequestId = useRef(0);
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -72,6 +73,7 @@ export default function CompaniesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchCompanies = async () => {
+    const requestId = ++latestCompaniesRequestId.current;
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
@@ -79,6 +81,11 @@ export default function CompaniesPage() {
       if (statusFilter !== 'ALL') params.append('status', statusFilter);
 
       const res = await fetch(`/api/companies?${params.toString()}`);
+      // Ignore a response for a stale request — the user may have kept
+      // typing/changing filters after this request went out, and a slower
+      // earlier request resolving later must not overwrite the latest result
+      // (e.g. flashing an unrelated list instead of "no results").
+      if (requestId !== latestCompaniesRequestId.current) return;
       if (res.ok) {
         const data = await res.json();
         setCompanies(data.companies || []);
@@ -86,7 +93,7 @@ export default function CompaniesPage() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (requestId === latestCompaniesRequestId.current) setLoading(false);
     }
   };
 

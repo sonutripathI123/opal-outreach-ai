@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ScoreGauge } from '@/components/ui/ScoreGauge';
 import { Badge } from '@/components/ui/Badge';
@@ -28,6 +28,7 @@ import Link from 'next/link';
 export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const latestEventsRequestId = useRef(0);
   const [search, setSearch] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('ALL');
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -64,12 +65,18 @@ export default function EventsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const fetchEvents = async () => {
+    const requestId = ++latestEventsRequestId.current;
     try {
       const params = new URLSearchParams();
       if (search) params.append('search', search);
       if (eventTypeFilter !== 'ALL') params.append('eventType', eventTypeFilter);
 
       const res = await fetch(`/api/events?${params.toString()}`);
+      // A newer search/filter change may have started while this request was
+      // in flight — an out-of-order (stale) response must not overwrite the
+      // result of the latest one, or a "no match" search can flash the
+      // previous unrelated list instead of the empty state.
+      if (requestId !== latestEventsRequestId.current) return;
       if (res.ok) {
         const data = await res.json();
         setEvents(data.events || []);
@@ -77,7 +84,7 @@ export default function EventsPage() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (requestId === latestEventsRequestId.current) setLoading(false);
     }
   };
 
