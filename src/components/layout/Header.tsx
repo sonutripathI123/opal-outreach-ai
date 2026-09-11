@@ -8,6 +8,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { NotificationDrawer } from './NotificationDrawer';
+import { InstallAppButton } from '@/components/pwa/InstallAppButton';
 
 interface HeaderProps {
   onToggleMobileMenu?: () => void;
@@ -124,6 +125,8 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
               {aiActive === null ? 'CHECKING' : aiActive ? 'ACTIVE' : 'TEMPLATE MODE'}
             </span>
           </div>
+
+          <InstallAppButton />
 
           {/* Notification Button */}
           <button
