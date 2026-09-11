@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { KNOWN_LOCATION_EVENTS, DiscoveredEventItem } from '@/lib/data/events-catalog';
 import { prisma } from '@/lib/prisma';
 import { PredictHqClient } from '@/lib/discovery/predicthq';
+import type { PredictHqEvent } from '@/lib/discovery/predicthq';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,23 +9,23 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { locationQuery = 'South Wharf' } = body;
-    const cleanQuery = locationQuery.trim().toLowerCase();
 
     const sourcesUsed: string[] = [];
 
-    // 0. Live, location-based event discovery via PredictHQ — works for ANY
-    //    Australian location, not just the curated catalog. Requires
-    //    PREDICTHQ_API_KEY; returns [] and is silently skipped without one.
-    //    PredictHQ does not supply organiser contact details, so these
-    //    events come back with blank organiser fields — a human must
-    //    research and add a real contact before a draft can be generated.
-    let matchedEvents: DiscoveredEventItem[] = [];
+    // Live, location-based event discovery via PredictHQ — works for ANY
+    // Australian location. Requires PREDICTHQ_API_KEY; returns [] and is
+    // silently skipped without one (or once the free trial has expired).
+    // PredictHQ does not supply organiser contact details, so these events
+    // come back with blank organiser fields — a human must research and add
+    // a real contact before a draft can be generated. We never fabricate a
+    // placeholder organiser/event for locations with no live matches.
+    let matchedEvents: PredictHqEvent[] = [];
     try {
       const predictHqKey = process.env.PREDICTHQ_API_KEY || '';
       if (predictHqKey) {
         const liveEvents = await PredictHqClient.searchEventsByLocation(locationQuery.trim(), predictHqKey);
         if (liveEvents.length > 0) {
-          matchedEvents.push(...(liveEvents as unknown as DiscoveredEventItem[]));
+          matchedEvents.push(...liveEvents);
           sourcesUsed.push('PREDICTHQ_LIVE');
         }
       }
@@ -33,41 +33,7 @@ export async function POST(req: NextRequest) {
       console.warn('PredictHQ live event search failed:', e);
     }
 
-    const liveCount = matchedEvents.length;
-
-    // 1. Check known catalog for matches
-    for (const [locKey, events] of Object.entries(KNOWN_LOCATION_EVENTS)) {
-      if (cleanQuery.includes(locKey) || locKey.includes(cleanQuery)) {
-        matchedEvents.push(...events);
-      }
-    }
-
-    // Also match inside event venues, suburbs or names
-    if (matchedEvents.length === 0) {
-      for (const events of Object.values(KNOWN_LOCATION_EVENTS)) {
-        for (const ev of events) {
-          if (
-            ev.venueName.toLowerCase().includes(cleanQuery) ||
-            ev.suburb.toLowerCase().includes(cleanQuery) ||
-            ev.city.toLowerCase().includes(cleanQuery) ||
-            ev.name.toLowerCase().includes(cleanQuery)
-          ) {
-            if (!matchedEvents.some((m) => m.id === ev.id)) {
-              matchedEvents.push(ev);
-            }
-          }
-        }
-      }
-    }
-
-    // Note: we intentionally do NOT fabricate placeholder events with made-up
-    // organiser names/emails for unknown locations — sending to invented
-    // addresses causes bounces and harms sender reputation. Unknown locations
-    // simply return no events from the curated catalog.
-
-    if (matchedEvents.length > liveCount) sourcesUsed.push('CURATED_LIST');
-
-    // De-duplicate by name (live PredictHQ results take precedence).
+    // De-duplicate by name.
     const seen = new Set<string>();
     matchedEvents = matchedEvents.filter((ev) => {
       const key = ev.name.toLowerCase().trim();
