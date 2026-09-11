@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { HunterClient } from '@/lib/enrichment/hunter';
+import { ApolloPoolManager } from '@/lib/enrichment/apollo';
 import { CorporateIntelligenceEngine } from '@/lib/ai/corporate';
 import { EmailGenerator } from '@/lib/ai/email-generator';
 import { logActivity, createNotification } from '@/lib/activity-logger';
@@ -108,6 +109,8 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      let domainImported = 0;
+
       // Add contacts & create drafts
       for (const e of emails) {
         if (!e.value) continue;
@@ -182,6 +185,84 @@ export async function POST(req: NextRequest) {
         });
 
         totalImported++;
+        domainImported++;
+      }
+
+      // Hunter found the organization but no usable email (or all emails
+      // were already-known contacts) — cascade to Apollo before giving up
+      // on this domain, so one click tries both sources automatically.
+      if (domainImported === 0) {
+        const existingAnyContact = await prisma.contact.findFirst({ where: { companyId: company.id } });
+        if (!existingAnyContact) {
+          try {
+            const apolloContact = await ApolloPoolManager.findDecisionMaker(cleanDomain, companyName);
+            if (apolloContact?.email) {
+              const contact = await prisma.contact.create({
+                data: {
+                  companyId: company.id,
+                  fullName: apolloContact.fullName || 'Executive Operations Lead',
+                  firstName: apolloContact.firstName || apolloContact.fullName?.split(' ')[0],
+                  lastName: apolloContact.lastName || apolloContact.fullName?.split(' ').slice(1).join(' '),
+                  email: apolloContact.email.toLowerCase().trim(),
+                  jobTitle: apolloContact.jobTitle,
+                  department: apolloContact.department || 'Operations',
+                  seniorityLevel: 'MANAGER',
+                  emailConfidence: apolloContact.emailConfidence,
+                  verificationStatus: apolloContact.verificationStatus,
+                  linkedinUrl: apolloContact.linkedinUrl,
+                  phone: apolloContact.phone,
+                  isPrimaryContact: true,
+                },
+              });
+
+              const generated = await EmailGenerator.generateEmailSmart({
+                businessProfile: {
+                  companyName: bProfile.companyName || 'Opal Chauffeurs',
+                  tradingName: bProfile.tradingName,
+                  website: bProfile.website || 'https://www.opalchauffeurs.com.au/',
+                  description: bProfile.description || 'Premium chauffeur transportation service based in Melbourne, Australia.',
+                  brandPositioning: bProfile.brandPositioning || 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
+                  emailSignature: bProfile.emailSignature || 'Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs',
+                  collaborationOffer: bProfile.collaborationOffer || 'Introducing Opal Chauffeurs as your corporate transport partner.',
+                },
+                recipient: {
+                  name: contact.fullName,
+                  role: contact.jobTitle,
+                  companyName,
+                  email: contact.email,
+                },
+                context: {
+                  type: 'COMPANY',
+                  industry: 'Corporate & Financial Services',
+                  location: 'Melbourne, VIC',
+                  signals: [`${companyName} presence in Melbourne`, `Executive flight transit demand`, `${contact.jobTitle} coordination`],
+                },
+              });
+
+              await prisma.emailDraft.create({
+                data: {
+                  companyId: company.id,
+                  contactId: contact.id,
+                  recipientName: contact.fullName,
+                  recipientEmail: contact.email,
+                  recipientRole: contact.jobTitle,
+                  subject: generated.subject,
+                  fixedContent: generated.fixedContent,
+                  dynamicContent: generated.dynamicContent,
+                  fullBodyText: generated.fullBodyText,
+                  personalizationReasoning: generated.personalizationReasoning,
+                  aiEvidenceCited: JSON.stringify(generated.evidenceCited || []),
+                  status: 'READY_FOR_REVIEW',
+                },
+              });
+
+              totalImported++;
+              domainImported++;
+            }
+          } catch (e) {
+            console.warn('Apollo fallback error for domain', cleanDomain, e);
+          }
+        }
       }
     }
 
