@@ -60,6 +60,10 @@ export default function SettingsPage() {
   const [testingGooglePlaces, setTestingGooglePlaces] = useState(false);
   const [testGooglePlacesResult, setTestGooglePlacesResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  const [vibeProspectingApiKey, setVibeProspectingApiKey] = useState('');
+  const [testingVibeProspecting, setTestingVibeProspecting] = useState(false);
+  const [testVibeProspectingResult, setTestVibeProspectingResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Apollo Key Pool State
   const [apolloPool, setApolloPool] = useState<ApolloKeyItem[]>([]);
   const [newApolloName, setNewApolloName] = useState('');
@@ -114,6 +118,11 @@ export default function SettingsPage() {
         const googlePlacesSetting = settingsList.find((s: any) => s.key === 'google_maps_api_key');
         if (googlePlacesSetting?.value) {
           setGooglePlacesApiKey(googlePlacesSetting.value);
+        }
+
+        const vibeProspectingSetting = settingsList.find((s: any) => s.key === 'vibe_prospecting_api_key');
+        if (vibeProspectingSetting?.value) {
+          setVibeProspectingApiKey(vibeProspectingSetting.value);
         }
 
         const aiParams = settingsList.find((s: any) => s.key === 'ai_engine_parameters');
@@ -206,6 +215,27 @@ export default function SettingsPage() {
       setTestGooglePlacesResult({ success: false, message: err.message || 'Error testing Google Places API key.' });
     } finally {
       setTestingGooglePlaces(false);
+    }
+  };
+
+  const handleTestVibeProspecting = async () => {
+    setTestingVibeProspecting(true);
+    setTestVibeProspectingResult(null);
+    try {
+      const res = await fetch('/api/settings/test-vibe-prospecting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: vibeProspectingApiKey }),
+      });
+      const data = await res.json();
+      setTestVibeProspectingResult({
+        success: Boolean(data.success),
+        message: data.message || data.error || 'Failed to verify Vibe Prospecting (Explorium) API key.',
+      });
+    } catch (err: any) {
+      setTestVibeProspectingResult({ success: false, message: err.message || 'Error testing Vibe Prospecting API key.' });
+    } finally {
+      setTestingVibeProspecting(false);
     }
   };
 
@@ -406,6 +436,16 @@ export default function SettingsPage() {
             value: googlePlacesApiKey.trim(),
             category: 'AI_CONFIG',
             description: 'Google Places API Key (company discovery)',
+          }),
+        }),
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'vibe_prospecting_api_key',
+            value: vibeProspectingApiKey.trim(),
+            category: 'AI_CONFIG',
+            description: 'Vibe Prospecting (Explorium AgentSource) API Key — third contact enrichment source',
           }),
         }),
         fetch('/api/settings', {
@@ -832,6 +872,65 @@ export default function SettingsPage() {
                 value={googlePlacesApiKey}
                 onChange={(e) => setGooglePlacesApiKey(e.target.value)}
                 placeholder="AIza..."
+                className="w-full pl-10 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 2.6: Vibe Prospecting (Explorium AgentSource) — 3rd contact enrichment source */}
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="w-5 h-5 text-amber-400" />
+              <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+                Vibe Prospecting (Explorium) — Contact Enrichment
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestVibeProspecting}
+              disabled={testingVibeProspecting || !vibeProspectingApiKey}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
+            >
+              {testingVibeProspecting ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              <span>{testingVibeProspecting ? 'Testing...' : 'Test Key'}</span>
+            </button>
+          </div>
+
+          <p className="text-[11px] text-slate-400">
+            Third contact-enrichment fallback, used automatically when both Hunter.io and Apollo.io fail to find a real
+            decision-maker email for a domain. Matches the company (Explorium Business Match), finds a decision-maker
+            (Fetch Prospects), then reveals their real email (Contact Information enrich). Get a key at{' '}
+            <span className="text-amber-300">admin.explorium.ai</span>.
+          </p>
+
+          {testVibeProspectingResult && (
+            <div
+              className={`p-3.5 rounded-2xl text-xs font-semibold flex items-start gap-2.5 ${
+                testVibeProspectingResult.success
+                  ? 'bg-emerald-950/50 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/50 border border-rose-500/40 text-rose-300'
+              }`}
+            >
+              {testVibeProspectingResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              )}
+              <span>{testVibeProspectingResult.message}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Vibe Prospecting (Explorium) API Key</label>
+            <div className="relative">
+              <Key className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+              <input
+                type="password"
+                value={vibeProspectingApiKey}
+                onChange={(e) => setVibeProspectingApiKey(e.target.value)}
+                placeholder="Explorium API key..."
                 className="w-full pl-10 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:border-amber-500 focus:outline-none"
               />
             </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { HunterClient } from '@/lib/enrichment/hunter';
 import { ApolloPoolManager } from '@/lib/enrichment/apollo';
+import { VibeProspectingClient } from '@/lib/enrichment/vibeprospecting';
 import { CorporateIntelligenceEngine } from '@/lib/ai/corporate';
 import { EmailGenerator } from '@/lib/ai/email-generator';
 import { logActivity, createNotification } from '@/lib/activity-logger';
@@ -195,22 +196,27 @@ export async function POST(req: NextRequest) {
         const existingAnyContact = await prisma.contact.findFirst({ where: { companyId: company.id } });
         if (!existingAnyContact) {
           try {
-            const apolloContact = await ApolloPoolManager.findDecisionMaker(cleanDomain, companyName);
-            if (apolloContact?.email) {
+            let fallbackContact = await ApolloPoolManager.findDecisionMaker(cleanDomain, companyName);
+            if (!fallbackContact?.email) {
+              // Apollo also came up empty — try Vibe Prospecting (Explorium)
+              // as a third source before giving up on this domain.
+              fallbackContact = await VibeProspectingClient.findDecisionMaker(cleanDomain, companyName);
+            }
+            if (fallbackContact?.email) {
               const contact = await prisma.contact.create({
                 data: {
                   companyId: company.id,
-                  fullName: apolloContact.fullName || 'Executive Operations Lead',
-                  firstName: apolloContact.firstName || apolloContact.fullName?.split(' ')[0],
-                  lastName: apolloContact.lastName || apolloContact.fullName?.split(' ').slice(1).join(' '),
-                  email: apolloContact.email.toLowerCase().trim(),
-                  jobTitle: apolloContact.jobTitle,
-                  department: apolloContact.department || 'Operations',
+                  fullName: fallbackContact.fullName || 'Executive Operations Lead',
+                  firstName: fallbackContact.firstName || fallbackContact.fullName?.split(' ')[0],
+                  lastName: fallbackContact.lastName || fallbackContact.fullName?.split(' ').slice(1).join(' '),
+                  email: fallbackContact.email.toLowerCase().trim(),
+                  jobTitle: fallbackContact.jobTitle,
+                  department: fallbackContact.department || 'Operations',
                   seniorityLevel: 'MANAGER',
-                  emailConfidence: apolloContact.emailConfidence,
-                  verificationStatus: apolloContact.verificationStatus,
-                  linkedinUrl: apolloContact.linkedinUrl,
-                  phone: apolloContact.phone,
+                  emailConfidence: fallbackContact.emailConfidence,
+                  verificationStatus: fallbackContact.verificationStatus,
+                  linkedinUrl: fallbackContact.linkedinUrl,
+                  phone: fallbackContact.phone,
                   isPrimaryContact: true,
                 },
               });
@@ -260,7 +266,7 @@ export async function POST(req: NextRequest) {
               domainImported++;
             }
           } catch (e) {
-            console.warn('Apollo fallback error for domain', cleanDomain, e);
+            console.warn('Apollo/Vibe Prospecting fallback error for domain', cleanDomain, e);
           }
         }
       }
