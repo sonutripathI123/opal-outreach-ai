@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const testModel = model || process.env.AI_MODEL_PRIMARY || 'claude-3-5-sonnet-20241022';
+    const testModel = model || process.env.AI_MODEL_PRIMARY || 'claude-opus-5';
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

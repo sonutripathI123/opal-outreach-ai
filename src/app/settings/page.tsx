@@ -92,8 +92,8 @@ export default function SettingsPage() {
   });
 
   const [apiKey, setApiKey] = useState('');
-  const [modelPrimary, setModelPrimary] = useState('claude-3-5-sonnet-20241022');
-  const [modelFast, setModelFast] = useState('claude-3-5-haiku-20241022');
+  const [modelPrimary, setModelPrimary] = useState('claude-opus-5');
+  const [modelFast, setModelFast] = useState('claude-haiku-4-5');
 
   const fetchSettings = async () => {
     try {
@@ -559,8 +559,8 @@ export default function SettingsPage() {
                 onChange={(e) => setModelPrimary(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
               >
-                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (Recommended)</option>
-                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                <option value="claude-opus-5">Claude Opus 5 (Recommended)</option>
+                <option value="claude-sonnet-5">Claude Sonnet 5</option>
               </select>
             </div>
 
@@ -573,7 +573,7 @@ export default function SettingsPage() {
                 onChange={(e) => setModelFast(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100"
               >
-                <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku</option>
+                <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
               </select>
             </div>
           </div>

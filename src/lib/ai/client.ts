@@ -39,7 +39,7 @@ export class AIClient {
 
   static async complete(request: AICompletionRequest): Promise<AICompletionResponse> {
     const apiKey = await this.getApiKey();
-    const model = process.env.AI_MODEL_PRIMARY || 'claude-3-5-sonnet-20241022';
+    const model = process.env.AI_MODEL_PRIMARY || 'claude-opus-5';
 
     if (apiKey) {
       try {
