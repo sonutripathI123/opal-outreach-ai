@@ -191,7 +191,7 @@ Email: book@opalchauffeurs.com.au | Direct: +61 432 000 718`;
       const signals = (context.signals || []).join('; ');
       const services = (context.recommendedServices || []).join(', ');
 
-      const systemPrompt = `You are an expert B2B outreach copywriter for ${bp.companyName}, a premium Melbourne chauffeur and executive transport company. You write concise, warm, professional cold outreach emails to corporate decision-makers and event organisers. Emails must be specific and personalised (never generic spam), 110-170 words, in Australian English, with one clear soft call-to-action. Do NOT invent facts about the recipient's company; only use the context provided. Return ONLY a valid JSON object — no markdown, no commentary.`;
+      const systemPrompt = `You are an expert B2B outreach copywriter for ${bp.companyName}, a premium Melbourne chauffeur and executive transport company. You write concise, warm, professional cold outreach emails to corporate decision-makers and event organisers. Emails must be specific and personalised (never generic spam), 110-170 words, in Australian English, with one clear soft call-to-action. Do NOT invent facts about the recipient's company; only use the context provided. Never write generic filler that could apply to any company (e.g. "your corporate presence and ongoing executive travel requirements") — if you don't have specific evidence about this company, instead ground the opening in one concrete, well-known characteristic of their industry (e.g. real estate agents doing property inspections and client meetings across multiple suburbs; law firms with late-night deal closings; consultancies with interstate client visits) so the email still reads as relevant to this type of business, not as a template. Return ONLY a valid JSON object — no markdown, no commentary.`;
 
       const userPrompt = `Write a personalised outreach email.
 
@@ -214,7 +214,7 @@ ${signals ? `- Signals: ${signals}` : ''}
 
 REQUIREMENTS:
 - Address the recipient by first name.
-- Reference something specific about their ${isEvent ? 'event' : 'company/role'} from the context above.
+- Reference something specific about their ${isEvent ? 'event' : 'company/role'} from the context above. If the only specifics available are the industry and location, build the opening around a concrete, industry-typical scenario (not "corporate presence" / "executive travel requirements" style filler that fits any company).
 - End the body with EXACTLY this signature block, verbatim:
 ${bp.emailSignature}
 
