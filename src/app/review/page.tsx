@@ -17,6 +17,7 @@ import {
   Filter,
   ExternalLink,
   Info,
+  Search,
 } from 'lucide-react';
 
 export default function ReviewPage() {
@@ -24,12 +25,16 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('READY_FOR_REVIEW');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const fetchDrafts = async () => {
     try {
-      const res = await fetch(`/api/outreach/drafts?status=${statusFilter}`);
+      // Always fetch every draft (all statuses) so a search can find a
+      // company's draft immediately regardless of which status tab is
+      // active — the status/type tabs then filter this client-side.
+      const res = await fetch(`/api/outreach/drafts?status=ALL`);
       if (res.ok) {
         const data = await res.json();
         setDrafts(data.drafts || []);
@@ -43,11 +48,26 @@ export default function ReviewPage() {
 
   useEffect(() => {
     fetchDrafts();
-  }, [statusFilter]);
+  }, []);
+
+  const searchLower = searchQuery.trim().toLowerCase();
 
   const filteredDrafts = drafts.filter((d) => {
-    if (typeFilter === 'COMPANY') return Boolean(d.company);
-    if (typeFilter === 'EVENT') return Boolean(d.event);
+    if (typeFilter === 'COMPANY' && !d.company) return false;
+    if (typeFilter === 'EVENT' && !d.event) return false;
+
+    if (searchLower) {
+      // A search matches across all statuses, ignoring the status tab,
+      // so a company's draft turns up immediately no matter its state.
+      const entity = d.company || d.event;
+      const haystack = [entity?.name, d.recipientName, d.recipientEmail, d.subject]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(searchLower);
+    }
+
+    if (statusFilter !== 'ALL') return d.status === statusFilter;
     return true;
   });
 
@@ -116,6 +136,16 @@ export default function ReviewPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search company, contact, or email..."
+                className="w-full sm:w-64 pl-8 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:border-amber-500 focus:outline-none"
+              />
+            </div>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
@@ -127,6 +157,12 @@ export default function ReviewPage() {
             </select>
           </div>
         </div>
+
+        {searchLower && (
+          <div className="text-[11px] text-amber-300/90 -mt-2 px-1">
+            Searching across all statuses for &ldquo;{searchQuery}&rdquo; — {filteredDrafts.length} match{filteredDrafts.length === 1 ? '' : 'es'} found.
+          </div>
+        )}
 
         {/* Drafts List */}
         {loading ? (
