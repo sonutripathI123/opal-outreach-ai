@@ -68,9 +68,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-    await prisma.event.delete({ where: { id } });
+
+    // Same reasoning as the company DELETE route: delete dependents
+    // explicitly, in dependency order, rather than relying on the database's
+    // own ON DELETE CASCADE, which previously surfaced as
+    // "Foreign key constraint violated: FollowUp_sentEmailId_fkey".
+    await prisma.$transaction([
+      prisma.followUp.deleteMany({ where: { sentEmail: { eventId: id } } }),
+      prisma.reply.deleteMany({ where: { sentEmail: { eventId: id } } }),
+      prisma.sentEmail.deleteMany({ where: { eventId: id } }),
+      prisma.emailDraft.deleteMany({ where: { eventId: id } }),
+      prisma.contact.deleteMany({ where: { eventId: id } }),
+      prisma.eventResearch.deleteMany({ where: { eventId: id } }),
+      prisma.eventOpportunity.deleteMany({ where: { eventId: id } }),
+      prisma.event.delete({ where: { id } }),
+    ]);
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('Error deleting event:', error);
     return NextResponse.json({ error: 'Failed to delete event' }, { status: 500 });
   }
 }

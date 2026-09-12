@@ -78,9 +78,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-    await prisma.company.delete({ where: { id } });
+
+    // Delete dependents explicitly, in dependency order, instead of relying on
+    // the database's own ON DELETE CASCADE — a FollowUp/Reply can reference a
+    // SentEmail that belongs to this company without the FK cascade chain
+    // reliably clearing it first, which previously surfaced as
+    // "Foreign key constraint violated: FollowUp_sentEmailId_fkey".
+    await prisma.$transaction([
+      prisma.followUp.deleteMany({ where: { OR: [{ companyId: id }, { sentEmail: { companyId: id } }] } }),
+      prisma.reply.deleteMany({ where: { OR: [{ companyId: id }, { sentEmail: { companyId: id } }] } }),
+      prisma.sentEmail.deleteMany({ where: { companyId: id } }),
+      prisma.emailDraft.deleteMany({ where: { companyId: id } }),
+      prisma.contact.deleteMany({ where: { companyId: id } }),
+      prisma.companyResearch.deleteMany({ where: { companyId: id } }),
+      prisma.companyOpportunity.deleteMany({ where: { companyId: id } }),
+      prisma.company.delete({ where: { id } }),
+    ]);
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('Error deleting company:', error);
     return NextResponse.json({ error: 'Failed to delete company' }, { status: 500 });
   }
 }
