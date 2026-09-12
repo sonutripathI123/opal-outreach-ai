@@ -49,10 +49,14 @@ export async function POST(req: NextRequest) {
       const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].trim().toLowerCase();
       if (!cleanDomain) continue;
 
+      // Hunter having no data at all for this domain (common for smaller/
+      // niche companies) used to `continue` here, skipping this domain
+      // entirely — including the Apollo/Vibe Prospecting fallback below,
+      // which don't need Hunter's own org lookup to work. Degrade to an
+      // empty result instead so the cascade still gets a chance to run.
       const searchRes = await HunterClient.domainSearch(cleanDomain, finalApiKey, 5);
-      if (!searchRes.success || !searchRes.result) continue;
-
-      const { organization, emails } = searchRes.result;
+      const organization = searchRes.success ? searchRes.result?.organization : undefined;
+      const emails = searchRes.success ? searchRes.result?.emails || [] : [];
       const companyName = organization || cleanDomain.split('.')[0].toUpperCase();
 
       // Find or create Company
@@ -189,9 +193,10 @@ export async function POST(req: NextRequest) {
         domainImported++;
       }
 
-      // Hunter found the organization but no usable email (or all emails
-      // were already-known contacts) — cascade to Apollo before giving up
-      // on this domain, so one click tries both sources automatically.
+      // Hunter found no usable email — whether it found the organization
+      // with zero emails, found nothing at all, or every email it did find
+      // was an already-known contact — cascade to Apollo, then Vibe
+      // Prospecting, before giving up on this domain.
       if (domainImported === 0) {
         const existingAnyContact = await prisma.contact.findFirst({ where: { companyId: company.id } });
         if (!existingAnyContact) {
