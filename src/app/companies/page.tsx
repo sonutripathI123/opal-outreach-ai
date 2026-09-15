@@ -730,8 +730,25 @@ export default function CompaniesPage() {
                                     setTimeout(() => setRadarSuccessMsg(null), 5000);
                                     return;
                                   }
-                                  // Hunter found nothing (or no key) — fall through to
-                                  // creating the company so you can enrich it manually.
+                                  // The Hunter route always creates (or finds) the
+                                  // Company record itself, even when Hunter/Apollo/
+                                  // Vibe Prospecting all fail to find a verified
+                                  // contact — so if it responded successfully at
+                                  // all, the company already exists now. Falling
+                                  // through to POST /api/companies here used to
+                                  // always hit a 409 conflict against the company
+                                  // Hunter's route had just created, which looked
+                                  // like a real failure but actually just meant no
+                                  // contact/draft was ever produced.
+                                  if (hres.ok && hdata.success) {
+                                    setRadarSuccessMsg(`"${item.name}" added to Corporate Companies, but no verified email was found via Hunter, Apollo, or Vibe Prospecting — add a contact manually from its Dossier.`);
+                                    fetchCompanies();
+                                    setTimeout(() => setRadarSuccessMsg(null), 6000);
+                                    return;
+                                  }
+                                  // Hunter itself failed (e.g. no API key configured) —
+                                  // fall through to creating the company so you can
+                                  // enrich it manually.
                                 }
 
                                 // item.domain already includes its real TLD
