@@ -252,6 +252,7 @@ model EmailDraft {
   fixedContent               String
   dynamicContent             String
   fullBodyText               String
+  htmlBody                   String?
   personalizationReasoning   String
   aiEvidenceCited            String     // JSON string
   status                     String     @default("READY_FOR_REVIEW") // DRAFT, READY_FOR_REVIEW, APPROVED, REJECTED, SENT
@@ -279,6 +280,7 @@ model SentEmail {
   recipientName  String
   subject        String
   exactSentBody  String
+  exactSentHtml  String?
   sentAt         DateTime   @default(now())
   deliveryStatus String     @default("DELIVERED") // DELIVERED, OPENED, CLICKED, BOUNCED, FAILED
   hasReply       Boolean    @default(false)

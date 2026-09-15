@@ -217,33 +217,13 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Fetch Business Profile for 2-layer email drafting
-      const profile = await prisma.businessProfile.findFirst();
-      const bProfile = profile || {
-        companyName: 'Opal Chauffeurs',
-        tradingName: 'Opal Chauffeurs',
-        website: 'https://www.opalchauffeurs.com.au/',
-        description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
-        brandPositioning: 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-        emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
-        collaborationOffer: 'Introducing Opal Chauffeurs as your corporate transport partner.',
-      };
-
-      // Generate 2-Layer Personalized Outreach Draft
-      const draftContent = await EmailGenerator.generateEmailSmart({
-        businessProfile: bProfile,
+      // Fixed partnership-outreach template, personalized by company/role only.
+      const draftContent = EmailGenerator.renderPartnershipTemplate({
         recipient: {
           name: contact.fullName,
           role: contact.jobTitle,
           companyName: company.name,
           email: contact.email,
-        },
-        context: {
-          type: 'COMPANY',
-          industry: company.industry,
-          location: company.city,
-          whyRelevant: analysis.whyRelevant,
-          recommendedServices: analysis.recommendedServices,
         },
       });
 
@@ -258,6 +238,7 @@ export async function POST(req: NextRequest) {
           fixedContent: draftContent.fixedContent,
           dynamicContent: draftContent.dynamicContent,
           fullBodyText: draftContent.fullBodyText,
+          htmlBody: draftContent.htmlBody,
           personalizationReasoning: draftContent.personalizationReasoning,
           aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
           status: 'READY_FOR_REVIEW',

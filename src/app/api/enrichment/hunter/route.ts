@@ -32,17 +32,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const profile = await prisma.businessProfile.findFirst();
-    const bProfile = profile || {
-      companyName: 'Opal Chauffeurs',
-      tradingName: 'Esteem Travel Service Pty Ltd',
-      website: 'https://www.opalchauffeurs.com.au/',
-      description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
-      brandPositioning: 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-      emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
-      collaborationOffer: 'Introducing Opal Chauffeurs as your corporate transport partner.',
-    };
-
     let totalImported = 0;
 
     for (const domain of domains) {
@@ -147,28 +136,13 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // Generate tailored draft
-        const generated = await EmailGenerator.generateEmailSmart({
-          businessProfile: {
-            companyName: bProfile.companyName || 'Opal Chauffeurs',
-            tradingName: bProfile.tradingName,
-            website: bProfile.website || 'https://www.opalchauffeurs.com.au/',
-            description: bProfile.description || 'Premium chauffeur transportation service based in Melbourne, Australia.',
-            brandPositioning: bProfile.brandPositioning || 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-            emailSignature: bProfile.emailSignature || 'Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs',
-            collaborationOffer: bProfile.collaborationOffer || 'Introducing Opal Chauffeurs as your corporate transport partner.',
-          },
+        // Fixed partnership-outreach template, personalized by company/role only.
+        const generated = EmailGenerator.renderPartnershipTemplate({
           recipient: {
             name: fullName,
             role,
             companyName,
             email: e.value.toLowerCase().trim(),
-          },
-          context: {
-            type: 'COMPANY',
-            industry: 'Corporate & Financial Services',
-            location: 'Melbourne, VIC',
-            signals: [`${companyName} presence in Melbourne`, `Executive flight transit demand`, `${role} coordination`],
           },
         });
 
@@ -183,6 +157,7 @@ export async function POST(req: NextRequest) {
             fixedContent: generated.fixedContent,
             dynamicContent: generated.dynamicContent,
             fullBodyText: generated.fullBodyText,
+            htmlBody: generated.htmlBody,
             personalizationReasoning: generated.personalizationReasoning,
             aiEvidenceCited: JSON.stringify(generated.evidenceCited || []),
             status: 'READY_FOR_REVIEW',
@@ -226,27 +201,12 @@ export async function POST(req: NextRequest) {
                 },
               });
 
-              const generated = await EmailGenerator.generateEmailSmart({
-                businessProfile: {
-                  companyName: bProfile.companyName || 'Opal Chauffeurs',
-                  tradingName: bProfile.tradingName,
-                  website: bProfile.website || 'https://www.opalchauffeurs.com.au/',
-                  description: bProfile.description || 'Premium chauffeur transportation service based in Melbourne, Australia.',
-                  brandPositioning: bProfile.brandPositioning || 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-                  emailSignature: bProfile.emailSignature || 'Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs',
-                  collaborationOffer: bProfile.collaborationOffer || 'Introducing Opal Chauffeurs as your corporate transport partner.',
-                },
+              const generated = EmailGenerator.renderPartnershipTemplate({
                 recipient: {
                   name: contact.fullName,
                   role: contact.jobTitle,
                   companyName,
                   email: contact.email,
-                },
-                context: {
-                  type: 'COMPANY',
-                  industry: 'Corporate & Financial Services',
-                  location: 'Melbourne, VIC',
-                  signals: [`${companyName} presence in Melbourne`, `Executive flight transit demand`, `${contact.jobTitle} coordination`],
                 },
               });
 
@@ -261,6 +221,7 @@ export async function POST(req: NextRequest) {
                   fixedContent: generated.fixedContent,
                   dynamicContent: generated.dynamicContent,
                   fullBodyText: generated.fullBodyText,
+                  htmlBody: generated.htmlBody,
                   personalizationReasoning: generated.personalizationReasoning,
                   aiEvidenceCited: JSON.stringify(generated.evidenceCited || []),
                   status: 'READY_FOR_REVIEW',

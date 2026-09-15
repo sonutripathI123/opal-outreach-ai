@@ -1,4 +1,35 @@
 import { AIClient } from './client';
+import fs from 'fs';
+import path from 'path';
+
+// Names/roles the app uses as honest "we don't actually know who this is"
+// placeholders when Hunter/Apollo/Vibe Prospecting found an email but no
+// real person attached to it — never greet a recipient by one of these.
+const GENERIC_PLACEHOLDER_NAMES = new Set([
+  'executive operations lead',
+  'corporate operations & travel contact',
+]);
+
+let cachedPartnershipTemplate: string | null = null;
+function loadPartnershipTemplate(): string {
+  if (cachedPartnershipTemplate) return cachedPartnershipTemplate;
+  const templatePath = path.join(process.cwd(), 'src/lib/email/templates/partnership-outreach.html');
+  cachedPartnershipTemplate = fs.readFileSync(templatePath, 'utf-8');
+  return cachedPartnershipTemplate;
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 export interface EmailGenerationParams {
   businessProfile: {
@@ -158,6 +189,55 @@ Email: book@opalchauffeurs.com.au | Direct: +61 432 000 718`;
       fullBodyText,
       personalizationReasoning,
       evidenceCited,
+    };
+  }
+
+  /**
+   * Renders the fixed HTML partnership-outreach template (provided by the
+   * business owner) for every recipient. Content is identical for every
+   * send — only the greeting (recipient's real name, or their role/company
+   * if no real name was found) and the target company's name are
+   * substituted. No AI call, no per-company copy variation.
+   */
+  static renderPartnershipTemplate(params: {
+    recipient: { name: string; role: string; companyName: string; email: string };
+  }): {
+    subject: string;
+    fixedContent: string;
+    dynamicContent: string;
+    fullBodyText: string;
+    htmlBody: string;
+    personalizationReasoning: string;
+    evidenceCited: string[];
+    generatedBy: 'TEMPLATE';
+  } {
+    const { recipient } = params;
+    const companyName = recipient.companyName || 'your organisation';
+
+    const hasRealName = recipient.name && !GENERIC_PLACEHOLDER_NAMES.has(recipient.name.trim().toLowerCase());
+    const greeting = hasRealName
+      ? recipient.name.split(' ')[0]
+      : recipient.role
+      ? `${recipient.role} Team`
+      : `${companyName} Team`;
+
+    const template = loadPartnershipTemplate();
+    const htmlBody = template
+      .split('{{GREETING}}').join(greeting)
+      .split('{{COMPANY_NAME}}').join(companyName);
+
+    const subject = `Executive Chauffeur & Ground Transportation Partnership – ${companyName}`;
+    const fullBodyText = htmlToPlainText(htmlBody);
+
+    return {
+      subject,
+      fixedContent: fullBodyText,
+      dynamicContent: '',
+      fullBodyText,
+      htmlBody,
+      personalizationReasoning: `Fixed company outreach template, addressed to ${greeting} at ${companyName}.`,
+      evidenceCited: [`Company: ${companyName}`, `Role: ${recipient.role || 'Unknown'}`],
+      generatedBy: 'TEMPLATE',
     };
   }
 

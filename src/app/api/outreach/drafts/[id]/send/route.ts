@@ -26,6 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       toName: draft.recipientName,
       subject: draft.subject,
       text: draft.fullBodyText,
+      html: draft.htmlBody || undefined,
       replyTo: 'book@opalchauffeurs.com.au',
     });
 
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         recipientName: draft.recipientName,
         subject: draft.subject,
         exactSentBody: draft.fullBodyText,
+        exactSentHtml: draft.htmlBody,
         deliveryStatus: dispatchResult.success ? 'DELIVERED' : 'BOUNCED',
       },
     });

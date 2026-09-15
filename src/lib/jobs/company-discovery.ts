@@ -48,17 +48,6 @@ export async function discoverCompaniesForActiveLocations(): Promise<CompanyDisc
   const googleKeySetting = await prisma.systemSettings.findUnique({ where: { key: 'google_maps_api_key' } });
   const googleKey = googleKeySetting?.value || process.env.GOOGLE_MAPS_API_KEY || '';
 
-  const businessProfile = await prisma.businessProfile.findFirst();
-  const bProfile = {
-    companyName: businessProfile?.companyName || 'Opal Chauffeurs',
-    tradingName: businessProfile?.tradingName,
-    website: businessProfile?.website || 'https://www.opalchauffeurs.com.au/',
-    description: businessProfile?.description || 'Premium chauffeur transportation service based in Melbourne, Australia.',
-    brandPositioning: businessProfile?.brandPositioning || 'Melbourne’s premier executive transport partner. Punctual, discreet, 24/7 reliability.',
-    emailSignature: businessProfile?.emailSignature || 'Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs',
-    collaborationOffer: businessProfile?.collaborationOffer || 'Introducing Opal Chauffeurs as your corporate transport partner.',
-  };
-
   let candidatesFound = 0;
   let companiesImported = 0;
   let contactsFound = 0;
@@ -168,16 +157,8 @@ export async function discoverCompaniesForActiveLocations(): Promise<CompanyDisc
               });
               contactsFound++;
 
-              const draft = await EmailGenerator.generateEmailSmart({
-                businessProfile: bProfile,
+              const draft = EmailGenerator.renderPartnershipTemplate({
                 recipient: { name: fullName, role, companyName: cand.name, email: e.value },
-                context: {
-                  type: 'COMPANY',
-                  industry: cand.industry,
-                  location: `${loc.cityName}, ${loc.state}`,
-                  whyRelevant: analysis.whyRelevant,
-                  recommendedServices: analysis.recommendedServices,
-                },
               });
 
               await prisma.emailDraft.create({
@@ -191,6 +172,7 @@ export async function discoverCompaniesForActiveLocations(): Promise<CompanyDisc
                   fixedContent: draft.fixedContent,
                   dynamicContent: draft.dynamicContent,
                   fullBodyText: draft.fullBodyText,
+                  htmlBody: draft.htmlBody,
                   personalizationReasoning: draft.personalizationReasoning,
                   aiEvidenceCited: JSON.stringify(draft.evidenceCited || []),
                   status: 'READY_FOR_REVIEW',

@@ -48,37 +48,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       },
     });
 
-    const profile = await prisma.businessProfile.findFirst();
-    const bProfile = {
-      companyName: profile?.companyName || 'Opal Chauffeurs',
-      tradingName: profile?.tradingName,
-      website: profile?.website || 'https://www.opalchauffeurs.com.au/',
-      description: profile?.description || 'Premium chauffeur transportation service based in Melbourne, Australia.',
-      brandPositioning: profile?.brandPositioning || 'Melbourne’s premier executive transport partner.',
-      emailSignature: profile?.emailSignature || 'Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs',
-      collaborationOffer: profile?.collaborationOffer || 'Introducing Opal Chauffeurs as your event transportation partner.',
-    };
-
-    let recommendedServices: string[] = [];
-    try {
-      if (event.opportunity?.recommendedServices) recommendedServices = JSON.parse(event.opportunity.recommendedServices);
-    } catch {}
-
-    const draftContent = await EmailGenerator.generateEmailSmart({
-      businessProfile: bProfile,
+    const draftContent = EmailGenerator.renderPartnershipTemplate({
       recipient: {
         name: contact.fullName,
         role: contact.jobTitle,
         companyName: organizerCompany || event.name,
         email: contact.email,
-      },
-      context: {
-        type: 'EVENT',
-        eventName: event.name,
-        venue: event.venueName,
-        location: event.city,
-        whyRelevant: event.opportunity?.whyRelevant,
-        recommendedServices,
       },
     });
 
@@ -93,6 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         fixedContent: draftContent.fixedContent,
         dynamicContent: draftContent.dynamicContent,
         fullBodyText: draftContent.fullBodyText,
+        htmlBody: draftContent.htmlBody,
         personalizationReasoning: draftContent.personalizationReasoning,
         aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
         status: 'READY_FOR_REVIEW',

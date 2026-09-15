@@ -185,34 +185,13 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Fetch Business Profile
-      const profile = await prisma.businessProfile.findFirst();
-      const bProfile = profile || {
-        companyName: 'Opal Chauffeurs',
-        tradingName: 'Opal Chauffeurs',
-        website: 'https://www.opalchauffeurs.com.au/',
-        description: 'Premium chauffeur transportation service based in Melbourne, Australia.',
-        brandPositioning: 'Melbourne’s premier executive transport partner.',
-        emailSignature: `Warm regards,\n\nInaya\nCorporate Partnerships Team\nOpal Chauffeurs\nWeb: https://www.opalchauffeurs.com.au/\nEmail: book@opalchauffeurs.com.au | Direct: +61 432 000 718`,
-        collaborationOffer: 'Introducing Opal Chauffeurs as your event transportation partner.',
-      };
-
-      // Generate 2-layer event personalized email draft
-      const draftContent = await EmailGenerator.generateEmailSmart({
-        businessProfile: bProfile,
+      // Fixed partnership-outreach template, personalized by company/role only.
+      const draftContent = EmailGenerator.renderPartnershipTemplate({
         recipient: {
           name: contact.fullName,
           role: contact.jobTitle,
           companyName: organizerCompany || event.name,
           email: contact.email,
-        },
-        context: {
-          type: 'EVENT',
-          eventName: event.name,
-          venue: event.venueName,
-          location: event.city,
-          whyRelevant: analysis.whyRelevant,
-          recommendedServices: analysis.recommendedServices,
         },
       });
 
@@ -227,6 +206,7 @@ export async function POST(req: NextRequest) {
           fixedContent: draftContent.fixedContent,
           dynamicContent: draftContent.dynamicContent,
           fullBodyText: draftContent.fullBodyText,
+          htmlBody: draftContent.htmlBody,
           personalizationReasoning: draftContent.personalizationReasoning,
           aiEvidenceCited: JSON.stringify(draftContent.evidenceCited),
           status: 'READY_FOR_REVIEW',
