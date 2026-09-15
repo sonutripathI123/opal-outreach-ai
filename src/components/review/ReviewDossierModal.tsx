@@ -24,6 +24,21 @@ import {
 } from 'lucide-react';
 import { RejectionReason } from '@/types';
 
+const EMAIL_SOURCE_LABELS: Record<string, string> = {
+  HUNTER_IO_VERIFIED: 'Hunter.io',
+  APOLLO_IO_VERIFIED: 'Apollo.io',
+  VIBE_PROSPECTING_VERIFIED: 'Vibe Prospecting',
+  OFFICIAL_WEBSITE: 'Official Website',
+  VERIFIED_DIRECTORY: 'Verified Directory',
+  PUBLIC_BUSINESS_LISTING: 'Public Business Listing',
+  MANUAL_ENTRY: 'Manual Entry',
+  GENERIC_FALLBACK: 'Generic Fallback',
+};
+
+function formatEmailSource(source: string): string {
+  return EMAIL_SOURCE_LABELS[source] || source.replace(/_/g, ' ');
+}
+
 interface ReviewDossierModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -233,6 +248,12 @@ export const ReviewDossierModal: React.FC<ReviewDossierModalProps> = ({
               </div>
               <div className="font-semibold text-slate-200 mt-0.5">{draft.recipientName}</div>
               <div className="text-[11px] text-slate-400">{draft.recipientEmail}</div>
+              {draft.contact?.emailSource && (
+                <div className="text-[10px] mt-1 pt-1 border-t border-slate-800 flex items-center gap-1 text-emerald-400">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Found via {formatEmailSource(draft.contact.emailSource)}</span>
+                </div>
+              )}
             </div>
           </div>
 

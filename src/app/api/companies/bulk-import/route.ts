@@ -276,6 +276,7 @@ export async function POST(req: NextRequest) {
           seniorityLevel: 'MANAGER',
           emailConfidence: 0.95,
           verificationStatus: 'VERIFIED',
+          emailSource: contactEmail ? 'MANUAL_ENTRY' : 'GENERIC_FALLBACK',
           linkedinUrl: linkedinUrl || null,
           isPrimaryContact: true,
         },

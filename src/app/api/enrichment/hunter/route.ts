@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
             seniorityLevel: 'MANAGER',
             emailConfidence: (e.confidence || 90) / 100,
             verificationStatus: 'VERIFIED',
+            emailSource: 'HUNTER_IO_VERIFIED',
             linkedinUrl: e.linkedin,
             isPrimaryContact: true,
           },
@@ -177,10 +178,12 @@ export async function POST(req: NextRequest) {
         if (!existingAnyContact) {
           try {
             let fallbackContact = await ApolloPoolManager.findDecisionMaker(cleanDomain, companyName);
+            let fallbackSource = 'APOLLO_IO_VERIFIED';
             if (!fallbackContact?.email) {
               // Apollo also came up empty — try Vibe Prospecting (Explorium)
               // as a third source before giving up on this domain.
               fallbackContact = await VibeProspectingClient.findDecisionMaker(cleanDomain, companyName);
+              fallbackSource = 'VIBE_PROSPECTING_VERIFIED';
             }
             if (fallbackContact?.email) {
               const contact = await prisma.contact.create({
@@ -195,6 +198,7 @@ export async function POST(req: NextRequest) {
                   seniorityLevel: 'MANAGER',
                   emailConfidence: fallbackContact.emailConfidence,
                   verificationStatus: fallbackContact.verificationStatus,
+                  emailSource: fallbackSource,
                   linkedinUrl: fallbackContact.linkedinUrl,
                   phone: fallbackContact.phone,
                   isPrimaryContact: true,

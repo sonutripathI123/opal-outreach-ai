@@ -151,6 +151,7 @@ export async function discoverCompaniesForActiveLocations(): Promise<CompanyDisc
                   department: e.department || 'Executive Management',
                   emailConfidence: (e.confidence || 90) / 100,
                   verificationStatus: 'VERIFIED',
+                  emailSource: 'HUNTER_IO_VERIFIED',
                   linkedinUrl: e.linkedin || undefined,
                   isPrimaryContact: true,
                 },
