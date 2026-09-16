@@ -202,7 +202,11 @@ export default function CompanyDetailPage() {
               className="px-5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-all self-start md:self-auto"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Review Outreach Draft</span>
+              <span>
+                {(company.emailDrafts?.length || 0) > 1
+                  ? `Review ${company.emailDrafts.length} Outreach Drafts`
+                  : 'Review Outreach Draft'}
+              </span>
             </button>
           )}
         </div>
@@ -354,6 +358,27 @@ export default function CompanyDetailPage() {
                   <span>Source: {contact.emailSource.replace(/_/g, ' ')}</span>
                   <span>Confidence: {Math.round(contact.emailConfidence * 100)}%</span>
                 </div>
+
+                {(() => {
+                  // A company can have several verified contacts (e.g. 4-5
+                  // decision-makers), each with their own outreach draft —
+                  // the top banner's "Review Outreach Draft" button only
+                  // ever opened the first one. Matching each contact to its
+                  // own draft here makes every one of them reachable.
+                  const contactDraft = company.emailDrafts?.find((d: any) => d.contactId === contact.id);
+                  return contactDraft ? (
+                    <button
+                      onClick={() => {
+                        setSelectedDraft({ ...contactDraft, company });
+                        setIsReviewOpen(true);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Review Draft</span>
+                    </button>
+                  ) : null;
+                })()}
               </div>
             ))}
           </div>
