@@ -17,9 +17,22 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             export PATH="$PATH:$(npm config get prefix)/bin"
             cd /var/www/opal-outreach-ai
-            git pull origin main
-            npm install
+            # `git pull` silently aborted for two deploys in a row here
+            # (a package-lock.json merge conflict from a manual npm install
+            # on the box) while every later command in this script still
+            # ran and "succeeded" — so GitHub Actions reported green while
+            # the VPS kept serving code from before those two commits.
+            # `set -e` makes any failing command here fail the whole job
+            # loudly, and resetting hard to origin/main (instead of pull)
+            # means there is no local-changes state left to conflict with
+            # in the first place.
+            git fetch origin main
+            git reset --hard origin/main
+            npm ci
+            npx prisma generate
+            npx prisma db push --skip-generate
             npm run build
-            pm2 restart opal-outreach
+            pm2 restart opal-outreach --update-env
