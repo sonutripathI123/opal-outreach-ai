@@ -126,10 +126,53 @@ export class ApolloPoolManager {
       'Chief of Staff',
     ];
 
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+
     // Try keys sequentially until one succeeds
     for (const keyEntry of activeKeys) {
       try {
         console.log(`🔍 Querying Apollo.io using key [${keyEntry.name}] for domain: ${domain}...`);
+
+        // A company's public/corporate website domain (e.g.
+        // "suncorpgroup.com.au") often isn't the domain its staff's real
+        // email addresses use (e.g. "suncorp.com.au") — Apollo itself shows
+        // verified contacts for the company under its actual email domain
+        // even when a pure q_organization_domains search on the corporate
+        // site's domain returns zero people. Resolving the Apollo
+        // organization by company NAME first and searching people by its
+        // organization_id sidesteps that mismatch entirely.
+        let orgId: string | null = null;
+        try {
+          const orgRes = await fetch('https://api.apollo.io/v1/mixed_companies/search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Api-Key': keyEntry.apiKey.trim(),
+            },
+            body: JSON.stringify({ q_organization_name: companyName, page: 1, per_page: 1 }),
+          });
+          if (orgRes.ok) {
+            const orgData = await orgRes.json().catch(() => ({}));
+            const org = (orgData.organizations || orgData.accounts || [])[0];
+            if (org?.id) orgId = org.id;
+          }
+        } catch (err: any) {
+          console.warn(`Apollo organization lookup by name failed for [${keyEntry.name}]:`, err.message);
+        }
+
+        // Prefer the resolved organization_id (immune to domain-naming
+        // mismatches); fall back to the raw domain if name lookup found
+        // nothing, since domain search still works fine for most companies.
+        const searchBody: Record<string, any> = {
+          person_titles: targetTitles,
+          page: 1,
+          per_page: 5,
+        };
+        if (orgId) {
+          searchBody.organization_ids = [orgId];
+        } else {
+          searchBody.q_organization_domains = cleanDomain;
+        }
 
         const res = await fetch('https://api.apollo.io/v1/mixed_people/search', {
           method: 'POST',
@@ -137,12 +180,7 @@ export class ApolloPoolManager {
             'Content-Type': 'application/json',
             'X-Api-Key': keyEntry.apiKey.trim(),
           },
-          body: JSON.stringify({
-            q_organization_domains: domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0],
-            person_titles: targetTitles,
-            page: 1,
-            per_page: 5,
-          }),
+          body: JSON.stringify(searchBody),
         });
 
         // Check if rate limited or limit reached
@@ -156,7 +194,32 @@ export class ApolloPoolManager {
 
         if (res.ok) {
           const data = await res.json();
-          const people = data.people || [];
+          let people = data.people || [];
+
+          // The organization_id search came up empty — try again with the
+          // raw domain before giving up on this key, in case the name
+          // lookup resolved the wrong organization or Apollo's domain
+          // index actually does have this one under the given domain.
+          if (people.length === 0 && orgId) {
+            const domainRes = await fetch('https://api.apollo.io/v1/mixed_people/search', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Api-Key': keyEntry.apiKey.trim(),
+              },
+              body: JSON.stringify({
+                q_organization_domains: cleanDomain,
+                person_titles: targetTitles,
+                page: 1,
+                per_page: 5,
+              }),
+            });
+            if (domainRes.ok) {
+              const domainData = await domainRes.json().catch(() => ({}));
+              people = domainData.people || [];
+            }
+          }
+
           const isUsableEmail = (email: any) => typeof email === 'string' && email.length > 0 && !email.includes('not_unlocked') && !email.includes('email_unavailable');
 
           // Some Apollo plans return an already-unlocked email straight in
