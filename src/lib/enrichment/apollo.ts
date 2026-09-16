@@ -341,11 +341,26 @@ export class ApolloPoolManager {
           }),
         });
 
-        if (res.status === 429 || res.status === 402 || res.status === 403) {
+        if (res.status === 429 || res.status === 402) {
+          // Rate limit / billing — genuinely account-wide, affects every
+          // Apollo capability this key has.
           keyEntry.status = 'LIMIT_REACHED';
           keyEntry.lastError = `Company search blocked (HTTP ${res.status})`;
           await this.savePool(pool);
           continue; // try next key
+        }
+
+        if (res.status === 403) {
+          // 403 here means this specific plan doesn't include the
+          // Organization/Company Search endpoint — a different Apollo
+          // capability from People Search + Enrichment (which is what
+          // findDecisionMaker uses to find contact emails). Marking the
+          // whole key LIMIT_REACHED on this used to silently disable
+          // email-finding for every company too, even when People Search
+          // and reveal were both working fine on this same key.
+          keyEntry.lastError = `Company search not available on this plan (HTTP 403)`;
+          await this.savePool(pool);
+          continue; // try next key for company search only — key stays ACTIVE
         }
 
         if (!res.ok) {
