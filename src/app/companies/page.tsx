@@ -24,6 +24,7 @@ import {
   Copy,
   Download,
   Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -46,6 +47,7 @@ export default function CompaniesPage() {
   const [radarScanning, setRadarScanning] = useState(false);
   const [radarImportingDomain, setRadarImportingDomain] = useState<string | null>(null);
   const [radarSuccessMsg, setRadarSuccessMsg] = useState<string | null>(null);
+  const [retryingCompanyId, setRetryingCompanyId] = useState<string | null>(null);
   const [copiedDomains, setCopiedDomains] = useState(false);
 
   // CSV Import State
@@ -416,6 +418,20 @@ export default function CompaniesPage() {
               const opp = comp.opportunity;
               const draft = comp.emailDrafts?.[0];
               const contact = comp.contacts?.[0];
+              // "DRAFTED" is just the company's pipeline status (set the
+              // moment it's created, contact or not) — it does NOT mean an
+              // email draft exists. Showing that raw enum value as-is made
+              // companies with no contact/draft (Hunter/Apollo/Vibe
+              // Prospecting all came up empty) look like they had a draft
+              // waiting for review when the Review Queue was actually empty
+              // for them.
+              const STATUS_LABELS: Record<string, string> = {
+                DRAFTED: 'In Review',
+                APPROVED: 'Approved',
+                CONTACTED: 'Contacted',
+                REPLIED: 'Replied',
+              };
+              const statusLabel = STATUS_LABELS[comp.status] || comp.status.replace(/_/g, ' ');
 
               return (
                 <div
@@ -438,8 +454,13 @@ export default function CompaniesPage() {
                           {comp.priority}
                         </Badge>
                         <Badge variant={comp.status === 'CONTACTED' ? 'sky' : comp.status === 'APPROVED' ? 'emerald' : 'amber'} size="sm">
-                          {comp.status.replace(/_/g, ' ')}
+                          {statusLabel}
                         </Badge>
+                        {!draft && !contact && (
+                          <Badge variant="rose" size="sm">
+                            NO CONTACT FOUND
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2 sm:gap-3">
@@ -502,6 +523,39 @@ export default function CompaniesPage() {
                         >
                           <Sparkles className="w-3.5 h-3.5" />
                           <span>Review Draft</span>
+                        </button>
+                      )}
+
+                      {!draft && !contact && comp.domain && (
+                        <button
+                          onClick={async () => {
+                            setRetryingCompanyId(comp.id);
+                            try {
+                              const hres = await fetch('/api/enrichment/hunter', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ domains: [comp.domain] }),
+                              });
+                              const hdata = await hres.json().catch(() => ({}));
+                              if (hres.ok && hdata.success && (hdata.importedCount || 0) > 0) {
+                                setRadarSuccessMsg(`"${comp.name}": ${hdata.importedCount} real contact(s) found & draft created in Review Queue!`);
+                              } else {
+                                setRadarSuccessMsg(`"${comp.name}": still no verified email found via Hunter, Apollo, or Vibe Prospecting.`);
+                              }
+                              fetchCompanies();
+                              setTimeout(() => setRadarSuccessMsg(null), 6000);
+                            } catch (e: any) {
+                              alert(e.message || `Error retrying import for "${comp.name}"`);
+                            } finally {
+                              setRetryingCompanyId(null);
+                            }
+                          }}
+                          disabled={retryingCompanyId === comp.id}
+                          title="Retry finding a contact via Hunter, Apollo & Vibe Prospecting"
+                          className="px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-400 border border-amber-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>{retryingCompanyId === comp.id ? 'Retrying...' : 'Retry Import'}</span>
                         </button>
                       )}
 
