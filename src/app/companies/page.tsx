@@ -633,17 +633,25 @@ export default function CompaniesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[50vh] overflow-y-auto pr-1">
               {radarTargets.map((item, idx) => {
                 const apolloUrl = `https://app.apollo.io/#/people?qOrganizationDomains=${encodeURIComponent(item.domain)}&personTitles[]=Executive%20Assistant&personTitles[]=Head%20of%20Operations&personTitles[]=Corporate%20Travel%20Manager&personTitles[]=Office%20Manager`;
-                const isAlreadyMonitored = companies.some(
+                const matchedCompany = companies.find(
                   (c) =>
                     c.name?.toLowerCase() === item.name?.toLowerCase() ||
                     c.website?.toLowerCase().includes(item.domain?.toLowerCase())
                 );
+                const isAlreadyMonitored = Boolean(matchedCompany);
+                // "In Queue" used to fire just from the company record
+                // existing — even when Hunter/Apollo/Vibe Prospecting all
+                // failed to find a contact and no draft was ever created,
+                // which looked like the pitch had worked when the Review
+                // Queue was actually still empty for it. Only call it
+                // "queued" once there's a real draft behind it.
+                const hasDraft = (matchedCompany?.emailDrafts?.length || 0) > 0;
 
                 return (
                   <div
                     key={idx}
                     className={`p-4 rounded-2xl bg-slate-950/80 border transition-all flex flex-col justify-between space-y-3 ${
-                      isAlreadyMonitored ? 'border-emerald-500/40' : 'border-slate-800 hover:border-amber-500/40'
+                      hasDraft ? 'border-emerald-500/40' : isAlreadyMonitored ? 'border-amber-500/30' : 'border-slate-800 hover:border-amber-500/40'
                     }`}
                   >
                     <div className="space-y-1.5">
@@ -651,11 +659,15 @@ export default function CompaniesPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h4 className="text-sm font-bold text-slate-100">{item.name}</h4>
-                            {isAlreadyMonitored && (
+                            {hasDraft ? (
                               <Badge variant="emerald" size="sm">
                                 ✓ MONITORED
                               </Badge>
-                            )}
+                            ) : isAlreadyMonitored ? (
+                              <Badge variant="amber" size="sm">
+                                ADDED — NO CONTACT
+                              </Badge>
+                            ) : null}
                           </div>
                           <div className="text-[11px] text-amber-400 font-mono">{item.domain}</div>
                         </div>
@@ -703,7 +715,7 @@ export default function CompaniesPage() {
                           <ExternalLink className="w-3 h-3 text-sky-400" />
                         </a>
 
-                        {isAlreadyMonitored ? (
+                        {hasDraft ? (
                           <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-emerald-400 text-xs font-semibold inline-flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>In Queue</span>
@@ -821,7 +833,13 @@ export default function CompaniesPage() {
                             className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold shadow flex items-center gap-1 transition-all disabled:opacity-50"
                           >
                             <Sparkles className="w-3 h-3" />
-                            <span>{radarImportingDomain === item.domain ? 'Importing...' : 'Import & Pitch'}</span>
+                            <span>
+                              {radarImportingDomain === item.domain
+                                ? 'Importing...'
+                                : isAlreadyMonitored
+                                ? 'Retry Import'
+                                : 'Import & Pitch'}
+                            </span>
                           </button>
                         )}
                       </div>
