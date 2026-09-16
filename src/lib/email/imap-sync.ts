@@ -168,14 +168,17 @@ export class ZohoImapSyncEngine {
           const matchedSent = prospectEmailMap.get(fromAddress);
           if (!matchedSent) continue;
 
-          // Check if reply already exists in DB to prevent duplicates
+          // Check if this exact message was already synced. The subject
+          // stays the same ("Re: ...") across every reply in a thread, so
+          // matching on {sentEmailId, senderEmail, subject} treated a
+          // prospect's second, third, etc. reply as a duplicate of their
+          // first and silently dropped it. The email's real Message-ID
+          // header is the one thing guaranteed unique per message; UID is
+          // a same-mailbox fallback for the rare message lacking one.
           const messageSubject = message.envelope?.subject || 'Re: Corporate Chauffeur Inquiry';
+          const messageIdKey = message.envelope?.messageId || `uid:${message.uid}`;
           const existingReply = await prisma.reply.findFirst({
-            where: {
-              sentEmailId: matchedSent.id,
-              senderEmail: fromAddress,
-              subject: messageSubject,
-            },
+            where: { messageId: messageIdKey },
           });
 
           if (existingReply) continue;
@@ -222,6 +225,7 @@ export class ZohoImapSyncEngine {
               contactId: matchedSent.contactId,
               senderEmail: fromAddress,
               subject: messageSubject,
+              messageId: messageIdKey,
               bodyText: rawBody,
               aiClassification: analysis.classification,
               aiExecutiveSummary: analysis.executiveSummary,

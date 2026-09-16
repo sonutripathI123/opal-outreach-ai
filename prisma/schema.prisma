@@ -301,6 +301,13 @@ model Reply {
   senderEmail        String
   subject            String
   bodyText           String
+  // The email's real Message-ID header (or "uid:<n>" fallback) — the true
+  // unique identifier for one specific inbound message. Subject stays
+  // identical ("Re: ...") across every reply in a thread, so relying on
+  // {sentEmailId, senderEmail, subject} alone to detect duplicates meant a
+  // prospect's SECOND reply in the same thread was silently treated as a
+  // dupe of their first and never synced.
+  messageId          String?    @unique
   receivedAt         DateTime   @default(now())
   aiClassification   String     @default("INTERESTED") // INTERESTED, MEETING_REQUEST, MORE_INFO_REQUESTED, PRICING_REQUESTED, FOLLOW_UP_REQUIRED, NOT_INTERESTED, UNCLEAR, OTHER
   aiExecutiveSummary String
