@@ -32,8 +32,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  pendingReviewCount = 3,
-  newReplyCount = 1,
+  pendingReviewCount = 0,
+  newReplyCount = 0,
   isMobileOpen = false,
   onMobileClose,
 }) => {
