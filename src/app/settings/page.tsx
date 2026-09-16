@@ -19,6 +19,8 @@ import {
   Mail,
   Send,
   MapPin,
+  Lock,
+  User,
 } from 'lucide-react';
 
 interface ApolloKeyItem {
@@ -37,6 +39,15 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Login Credentials (Account)
+  const [currentLoginEmail, setCurrentLoginEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newLoginEmail, setNewLoginEmail] = useState('');
+  const [newLoginPassword, setNewLoginPassword] = useState('');
+  const [confirmNewLoginPassword, setConfirmNewLoginPassword] = useState('');
+  const [changingCredentials, setChangingCredentials] = useState(false);
+  const [credentialsResult, setCredentialsResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Testing state for Claude
   const [testingAi, setTestingAi] = useState(false);
@@ -195,7 +206,56 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings();
+    fetch('/api/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user?.email) setCurrentLoginEmail(data.user.email);
+      })
+      .catch(() => {});
   }, []);
+
+  const handleChangeCredentials = async () => {
+    setCredentialsResult(null);
+    if (!currentPassword) {
+      setCredentialsResult({ success: false, message: 'Enter your current password to confirm this change.' });
+      return;
+    }
+    if (!newLoginEmail.trim() && !newLoginPassword) {
+      setCredentialsResult({ success: false, message: 'Enter a new email and/or a new password.' });
+      return;
+    }
+    if (newLoginPassword && newLoginPassword !== confirmNewLoginPassword) {
+      setCredentialsResult({ success: false, message: 'New password and confirmation do not match.' });
+      return;
+    }
+    setChangingCredentials(true);
+    try {
+      const res = await fetch('/api/auth/account', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword,
+          newEmail: newLoginEmail.trim() || undefined,
+          newPassword: newLoginPassword || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCredentialsResult({ success: false, message: data.error || 'Failed to update login credentials' });
+        return;
+      }
+      setCurrentLoginEmail(data.user.email);
+      setCurrentPassword('');
+      setNewLoginEmail('');
+      setNewLoginPassword('');
+      setConfirmNewLoginPassword('');
+      setCredentialsResult({ success: true, message: `Login credentials updated! You'll now log in with ${data.user.email}.` });
+    } catch (e: any) {
+      setCredentialsResult({ success: false, message: e.message || 'Failed to update login credentials' });
+    } finally {
+      setChangingCredentials(false);
+    }
+  };
 
   const handleTestGooglePlaces = async () => {
     setTestingGooglePlaces(true);
@@ -527,6 +587,91 @@ export default function SettingsPage() {
             <span>Settings and API configurations saved successfully!</span>
           </div>
         )}
+
+        {/* SECTION 0: Login Credentials (Account) */}
+        <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex items-center gap-2.5 pb-3 border-b border-slate-800">
+            <div className="p-2 rounded-xl bg-slate-800">
+              <Lock className="w-4 h-4 text-amber-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-100">Login Credentials</h2>
+              <p className="text-[11px] text-slate-400">
+                Change the email and password used to log into this dashboard{currentLoginEmail ? ` — currently ${currentLoginEmail}` : ''}.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Current Password (required to confirm)</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter your current password"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1">
+                <User className="w-3 h-3" />
+                <span>New Login Email (optional)</span>
+              </label>
+              <input
+                type="email"
+                value={newLoginEmail}
+                onChange={(e) => setNewLoginEmail(e.target.value)}
+                placeholder={currentLoginEmail || 'Leave blank to keep current email'}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div />
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">New Password (optional)</label>
+              <input
+                type="password"
+                value={newLoginPassword}
+                onChange={(e) => setNewLoginPassword(e.target.value)}
+                placeholder="Leave blank to keep current password"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Confirm New Password</label>
+              <input
+                type="password"
+                value={confirmNewLoginPassword}
+                onChange={(e) => setConfirmNewLoginPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          </div>
+
+          {credentialsResult && (
+            <div
+              className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                credentialsResult.success
+                  ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-950/40 border border-rose-500/40 text-rose-300'
+              }`}
+            >
+              {credentialsResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+              <span>{credentialsResult.message}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleChangeCredentials}
+            disabled={changingCredentials}
+            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>{changingCredentials ? 'Updating...' : 'Update Login Credentials'}</span>
+          </button>
+        </div>
 
         {/* SECTION 1: Claude API Configuration */}
         <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
