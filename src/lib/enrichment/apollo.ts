@@ -157,12 +157,56 @@ export class ApolloPoolManager {
         if (res.ok) {
           const data = await res.json();
           const people = data.people || [];
+          const isUsableEmail = (email: any) => typeof email === 'string' && email.length > 0 && !email.includes('not_unlocked') && !email.includes('email_unavailable');
+
+          // Some Apollo plans return an already-unlocked email straight in
+          // search results — use it for free if it's there.
+          let person = people.find((p: any) => isUsableEmail(p.email) && p.email_status === 'verified') || people.find((p: any) => isUsableEmail(p.email));
+
+          if (!person && people.length > 0) {
+            // The People Search endpoint never actually includes a real
+            // email — Apollo locks it behind a separate People Match
+            // (enrichment) call, the exact same one apollo.io's own web UI
+            // fires when you open a search result (that's what the credit
+            // cost you see there is for). Without this second call, this
+            // cascade could never find a real email even when Apollo
+            // clearly has one for the person.
+            const candidate = people[0];
+            try {
+              const matchRes = await fetch('https://api.apollo.io/v1/people/match', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Api-Key': keyEntry.apiKey.trim(),
+                },
+                body: JSON.stringify({
+                  id: candidate.id,
+                  reveal_personal_emails: true,
+                }),
+              });
+
+              if (matchRes.status === 429 || matchRes.status === 402 || matchRes.status === 403) {
+                console.warn(`⚠️ Apollo Key [${keyEntry.name}] blocked on enrichment (Status ${matchRes.status}). Auto-switching to next key...`);
+                keyEntry.status = 'LIMIT_REACHED';
+                keyEntry.lastError = `Enrichment blocked or HTTP ${matchRes.status}`;
+                await this.savePool(pool);
+                continue;
+              }
+
+              if (matchRes.ok) {
+                const matchData = await matchRes.json().catch(() => ({}));
+                if (isUsableEmail(matchData?.person?.email)) {
+                  person = matchData.person;
+                }
+              }
+            } catch (err: any) {
+              console.error(`Error revealing Apollo contact email with key [${keyEntry.name}]:`, err.message);
+            }
+          }
 
           // Only ever return a person Apollo actually gave us a real email
           // for — never fabricate a "contact@domain.com" guess, which would
           // bounce and damage sender reputation.
-          const person = people.find((p: any) => p.email && p.email_status === 'verified') || people.find((p: any) => p.email);
-
           if (person?.email) {
             // Update credit usage
             keyEntry.creditsUsed = (keyEntry.creditsUsed || 0) + 1;
