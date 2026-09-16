@@ -24,6 +24,7 @@ import {
   FileText,
   Activity,
   UserPlus,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -38,11 +39,10 @@ export default function CompanyDetailPage() {
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
-  const [contactName, setContactName] = useState('');
-  const [contactRole, setContactRole] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
+  const [contactRows, setContactRows] = useState([{ name: '', role: '', email: '' }]);
   const [savingContact, setSavingContact] = useState(false);
   const [addContactError, setAddContactError] = useState<string | null>(null);
+  const [addContactSuccess, setAddContactSuccess] = useState<string | null>(null);
 
   const fetchCompany = async () => {
     try {
@@ -63,36 +63,63 @@ export default function CompanyDetailPage() {
     if (id) fetchCompany();
   }, [id]);
 
+  const addContactRow = () => setContactRows([...contactRows, { name: '', role: '', email: '' }]);
+  const removeContactRow = (idx: number) => setContactRows(contactRows.filter((_, i) => i !== idx));
+  const updateContactRow = (idx: number, field: 'name' | 'role' | 'email', value: string) => {
+    setContactRows(contactRows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+  };
+
   const handleAddContact = async () => {
-    if (!contactName.trim() || !contactRole.trim() || !contactEmail.trim()) {
-      setAddContactError('Name, post/role, and email are all required.');
+    const filledRows = contactRows.filter((r) => r.name.trim() || r.role.trim() || r.email.trim());
+    if (filledRows.length === 0) {
+      setAddContactError('Add at least one contact (name, post, and email).');
+      return;
+    }
+    const incomplete = filledRows.some((r) => !r.name.trim() || !r.role.trim() || !r.email.trim());
+    if (incomplete) {
+      setAddContactError('Every contact row needs a name, post, and email.');
       return;
     }
     setSavingContact(true);
     setAddContactError(null);
+    setAddContactSuccess(null);
     try {
       const res = await fetch(`/api/companies/${id}/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactName, contactRole, contactEmail }),
+        body: JSON.stringify({
+          contacts: filledRows.map((r) => ({ contactName: r.name, contactRole: r.role, contactEmail: r.email })),
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setAddContactError(data.error || 'Failed to add contact');
+      if (!res.ok || !data.success) {
+        const firstFailure = data.failed?.[0]?.error;
+        setAddContactError(firstFailure || data.error || 'Failed to add contact(s)');
         return;
       }
-      setIsAddContactOpen(false);
-      setContactName('');
-      setContactRole('');
-      setContactEmail('');
       await fetchCompany();
-      // Straight into review, exactly as if Hunter/Apollo/Vibe Prospecting
-      // had found this contact automatically — the draft is already
-      // generated from the fixed partnership-outreach template.
-      setSelectedDraft({ ...data.draft, company });
-      setIsReviewOpen(true);
+
+      const createdCount = data.created?.length || 0;
+      const failedCount = data.failed?.length || 0;
+
+      if (createdCount === 1 && failedCount === 0) {
+        // Exactly one contact — go straight into review, matching what
+        // Hunter/Apollo/Vibe Prospecting do when they find one automatically.
+        setIsAddContactOpen(false);
+        setContactRows([{ name: '', role: '', email: '' }]);
+        setSelectedDraft({ ...data.draft, company });
+        setIsReviewOpen(true);
+      } else {
+        // Several contacts — each now has its own "Review Draft" button on
+        // its card below, so stay on the Dossier and just report the count.
+        setContactRows([{ name: '', role: '', email: '' }]);
+        setAddContactSuccess(
+          `${createdCount} draft(s) generated.` +
+            (failedCount > 0 ? ` ${failedCount} skipped: ${data.failed.map((f: any) => f.error).join('; ')}` : '')
+        );
+      }
     } catch (e: any) {
-      setAddContactError(e.message || 'Failed to add contact');
+      setAddContactError(e.message || 'Failed to add contact(s)');
     } finally {
       setSavingContact(false);
     }
@@ -422,46 +449,80 @@ export default function CompanyDetailPage() {
         onClose={() => {
           setIsAddContactOpen(false);
           setAddContactError(null);
+          setAddContactSuccess(null);
         }}
-        title="Add Contact Manually"
+        title="Add Contact(s) Manually"
         subtitle={`For ${company.name} — used when Hunter, Apollo & Vibe Prospecting couldn't find a verified contact`}
-        maxWidth="sm"
+        maxWidth="md"
       >
         <div className="space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name</label>
-            <input
-              type="text"
-              value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
-              placeholder="e.g. Susie Shelley"
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
-            />
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+            {contactRows.map((row, idx) => (
+              <div key={idx} className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 relative">
+                {contactRows.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeContactRow(idx)}
+                    title="Remove this contact"
+                    className="absolute top-2.5 right-2.5 text-slate-500 hover:text-rose-400 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pr-6">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400 mb-1 block">Full Name</label>
+                    <input
+                      type="text"
+                      value={row.name}
+                      onChange={(e) => updateContactRow(idx, 'name', e.target.value)}
+                      placeholder="e.g. Susie Shelley"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400 mb-1 block">Post / Role</label>
+                    <input
+                      type="text"
+                      value={row.role}
+                      onChange={(e) => updateContactRow(idx, 'role', e.target.value)}
+                      placeholder="e.g. Head of Operations"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 mb-1 block">Email Address</label>
+                  <input
+                    type="email"
+                    value={row.email}
+                    onChange={(e) => updateContactRow(idx, 'email', e.target.value)}
+                    placeholder="e.g. susie.shelley@hubaustralia.com"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Post / Role</label>
-            <input
-              type="text"
-              value={contactRole}
-              onChange={(e) => setContactRole(e.target.value)}
-              placeholder="e.g. Head of Operations"
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email Address</label>
-            <input
-              type="email"
-              value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
-              placeholder="e.g. susie.shelley@hubaustralia.com"
-              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
-            />
-          </div>
+
+          <button
+            type="button"
+            onClick={addContactRow}
+            className="w-full px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-400 border border-dashed border-amber-500/30 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Add Another Contact</span>
+          </button>
 
           {addContactError && (
             <div className="text-xs text-rose-400 bg-rose-950/30 border border-rose-500/30 rounded-xl p-3">
               {addContactError}
+            </div>
+          )}
+
+          {addContactSuccess && (
+            <div className="text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3">
+              {addContactSuccess} Each has its own "Review Draft" button below once you close this.
             </div>
           )}
 
@@ -471,7 +532,13 @@ export default function CompanyDetailPage() {
             className="w-full px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-bold shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
-            <span>{savingContact ? 'Generating Draft...' : 'Add Contact & Generate Draft'}</span>
+            <span>
+              {savingContact
+                ? 'Generating Draft(s)...'
+                : contactRows.filter((r) => r.name || r.role || r.email).length > 1
+                ? `Add ${contactRows.length} Contacts & Generate Drafts`
+                : 'Add Contact & Generate Draft'}
+            </span>
           </button>
         </div>
       </Modal>
