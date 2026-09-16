@@ -534,7 +534,10 @@ export default function CompaniesPage() {
                               const hres = await fetch('/api/enrichment/hunter', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ domains: [comp.domain] }),
+                                body: JSON.stringify({
+                                  domains: [comp.domain],
+                                  domainNames: { [comp.domain]: comp.name },
+                                }),
                               });
                               const hdata = await hres.json().catch(() => ({}));
                               if (hres.ok && hdata.success && (hdata.importedCount || 0) > 0) {
@@ -787,7 +790,10 @@ export default function CompaniesPage() {
                                   const hres = await fetch('/api/enrichment/hunter', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ domains: [item.domain] }),
+                                    body: JSON.stringify({
+                                      domains: [item.domain],
+                                      domainNames: { [item.domain]: item.name },
+                                    }),
                                   });
                                   const hdata = await hres.json().catch(() => ({}));
                                   if (hres.ok && hdata.success && (hdata.importedCount || 0) > 0) {

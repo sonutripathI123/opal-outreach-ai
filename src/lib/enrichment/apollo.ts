@@ -234,37 +234,48 @@ export class ApolloPoolManager {
             // cost you see there is for). Without this second call, this
             // cascade could never find a real email even when Apollo
             // clearly has one for the person.
-            const candidate = people[0];
-            try {
-              const matchRes = await fetch('https://api.apollo.io/v1/people/match', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Api-Key': keyEntry.apiKey.trim(),
-                },
-                body: JSON.stringify({
-                  id: candidate.id,
-                  reveal_personal_emails: true,
-                }),
-              });
+            //
+            // Only the top candidate used to be tried — if Apollo simply
+            // didn't have a revealable email for that one specific person,
+            // the whole domain was given up on even when the next
+            // candidate down the list had one. Try up to the first 3
+            // (bounding the credit cost) and stop at the first real email.
+            let limitReached = false;
+            for (const candidate of people.slice(0, 3)) {
+              try {
+                const matchRes = await fetch('https://api.apollo.io/v1/people/match', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-Api-Key': keyEntry.apiKey.trim(),
+                  },
+                  body: JSON.stringify({
+                    id: candidate.id,
+                    reveal_personal_emails: true,
+                  }),
+                });
 
-              if (matchRes.status === 429 || matchRes.status === 402 || matchRes.status === 403) {
-                console.warn(`⚠️ Apollo Key [${keyEntry.name}] blocked on enrichment (Status ${matchRes.status}). Auto-switching to next key...`);
-                keyEntry.status = 'LIMIT_REACHED';
-                keyEntry.lastError = `Enrichment blocked or HTTP ${matchRes.status}`;
-                await this.savePool(pool);
-                continue;
-              }
-
-              if (matchRes.ok) {
-                const matchData = await matchRes.json().catch(() => ({}));
-                if (isUsableEmail(matchData?.person?.email)) {
-                  person = matchData.person;
+                if (matchRes.status === 429 || matchRes.status === 402 || matchRes.status === 403) {
+                  console.warn(`⚠️ Apollo Key [${keyEntry.name}] blocked on enrichment (Status ${matchRes.status}). Auto-switching to next key...`);
+                  keyEntry.status = 'LIMIT_REACHED';
+                  keyEntry.lastError = `Enrichment blocked or HTTP ${matchRes.status}`;
+                  await this.savePool(pool);
+                  limitReached = true;
+                  break;
                 }
+
+                if (matchRes.ok) {
+                  const matchData = await matchRes.json().catch(() => ({}));
+                  if (isUsableEmail(matchData?.person?.email)) {
+                    person = matchData.person;
+                    break;
+                  }
+                }
+              } catch (err: any) {
+                console.error(`Error revealing Apollo contact email with key [${keyEntry.name}]:`, err.message);
               }
-            } catch (err: any) {
-              console.error(`Error revealing Apollo contact email with key [${keyEntry.name}]:`, err.message);
             }
+            if (limitReached) continue;
           }
 
           // Only ever return a person Apollo actually gave us a real email

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const { domains, apiKey } = await req.json();
+    const { domains, apiKey, domainNames } = await req.json();
 
     if (!Array.isArray(domains) || domains.length === 0) {
       return NextResponse.json({ error: 'Domains array is required' }, { status: 400 });
@@ -46,17 +46,24 @@ export async function POST(req: NextRequest) {
       const searchRes = await HunterClient.domainSearch(cleanDomain, finalApiKey, 5);
       const organization = searchRes.success ? searchRes.result?.organization : undefined;
       const emails = searchRes.success ? searchRes.result?.emails || [] : [];
-      const companyName = organization || cleanDomain.split('.')[0].toUpperCase();
+      // The caller (Target Radar / Corporate Companies "Retry Import") may
+      // already know the company's real, correctly-cased name — from
+      // Google Places, or from the Company record itself on a retry.
+      const preferredName: string | undefined = domainNames?.[domain] || domainNames?.[cleanDomain];
 
-      // Find or create Company
-      let company = await prisma.company.findFirst({
-        where: {
-          OR: [
-            { domain: cleanDomain },
-            { name: companyName },
-          ],
-        },
-      });
+      // Find the Company by domain FIRST. Its stored name — the real name
+      // a human or Google Places gave it — is the one source of truth.
+      // Falling back to a domain-derived guess like "SUNCORPGROUP" here
+      // used to silently rename an existing company on every retry, and
+      // that same wrong guess was then fed into Apollo's name-based
+      // organization search and into the outreach email's own
+      // {{COMPANY_NAME}} placeholder — undermining both.
+      let company = await prisma.company.findFirst({ where: { domain: cleanDomain } });
+      const companyName = company?.name || preferredName || organization || cleanDomain.split('.')[0].toUpperCase();
+
+      if (!company) {
+        company = await prisma.company.findFirst({ where: { name: companyName } });
+      }
 
       if (!company) {
         // Hunter's domain-search API only returns emails — it has no signal
@@ -118,6 +125,12 @@ export async function POST(req: NextRequest) {
 
         const fullName = (e.firstName || e.lastName) ? `${e.firstName} ${e.lastName}`.trim() : 'Executive Operations Lead';
         const role = e.position || 'Corporate Travel & Operations';
+        // Hunter's domain search returns a confidence score per email —
+        // many are pattern-guessed (e.g. first.last@domain) rather than
+        // actually confirmed, often well under 80%. Labeling every single
+        // one "VERIFIED" regardless of that score misrepresented low-
+        // confidence guesses as confirmed, real addresses.
+        const confidence = typeof e.confidence === 'number' ? e.confidence : 90;
 
         const contact = await prisma.contact.create({
           data: {
@@ -129,8 +142,8 @@ export async function POST(req: NextRequest) {
             jobTitle: role,
             department: e.department || 'Executive Management',
             seniorityLevel: 'MANAGER',
-            emailConfidence: (e.confidence || 90) / 100,
-            verificationStatus: 'VERIFIED',
+            emailConfidence: confidence / 100,
+            verificationStatus: confidence >= 80 ? 'VERIFIED' : 'LIKELY',
             emailSource: 'HUNTER_IO_VERIFIED',
             linkedinUrl: e.linkedin,
             isPrimaryContact: true,
