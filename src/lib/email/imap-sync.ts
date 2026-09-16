@@ -1,7 +1,39 @@
 import { ImapFlow } from 'imapflow';
+import { simpleParser } from 'mailparser';
 import { prisma } from '@/lib/prisma';
 import { ReplyAnalyzer } from '@/lib/ai/reply-analyzer';
 import { logActivity, createNotification } from '@/lib/activity-logger';
+
+// Real replies come back as raw MIME source (quoted-printable/base64
+// encoded, multipart, with the whole original outreach email quoted
+// below the new text) — cuts off at the first line that looks like the
+// start of that quoted history, so only the prospect's actual new
+// message is kept. Covers the reply-quote conventions used by Gmail,
+// Outlook, Apple Mail and Yahoo (the overwhelming majority of real
+// inboxes), matching the same style of heuristic long-established
+// reply-parsing libraries (e.g. GitHub's talon, email-reply-parser) use.
+function stripQuotedReply(text: string): string {
+  const lines = text.split(/\r?\n/);
+  let cutIndex = lines.length;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const looksLikeQuoteHeader =
+      /^on .{5,160}\swrote:\s*$/i.test(line) ||
+      /^-{2,}\s*original message\s*-{2,}/i.test(line) ||
+      /^-{2,}\s*forwarded message\s*-{2,}/i.test(line) ||
+      /^from:\s?.+@.+$/i.test(line) ||
+      line.startsWith('>');
+
+    if (looksLikeQuoteHeader) {
+      cutIndex = i;
+      break;
+    }
+  }
+
+  return lines.slice(0, cutIndex).join('\n').trim();
+}
 
 export interface ImapConfig {
   host: string;
@@ -148,19 +180,29 @@ export class ZohoImapSyncEngine {
 
           if (existingReply) continue;
 
-          // Extract text snippet
-          let rawBody = message.envelope?.subject || '';
+          // Extract the actual new reply text. A hand-rolled regex over the
+          // raw MIME source used to be used here — it never decoded
+          // quoted-printable/base64 encoding (leaving literal "=E2=80=AF",
+          // "=C2=B7" etc. in the stored text) and often grabbed MIME part
+          // headers (Content-Type, Content-Transfer-Encoding) as if they
+          // were body text, on top of including the entire quoted original
+          // outreach email below the prospect's real reply. mailparser
+          // properly parses MIME (any encoding/charset) into clean text;
+          // stripQuotedReply then cuts off the quoted history so only the
+          // prospect's own new words are kept.
+          let rawBody = '';
           if (message.source) {
-            const rawStr = message.source.toString('utf-8');
-            // Basic text extraction from mime source
-            const textMatch = rawStr.match(/\r?\n\r?\n([\s\S]+?)(?=\r?\n--|\r?\n\.\r?\n|$)/);
-            if (textMatch && textMatch[1]) {
-              rawBody = textMatch[1].replace(/<[^>]*>/g, '').trim().substring(0, 1500);
+            try {
+              const parsed = await simpleParser(message.source);
+              const plain = parsed.text || (parsed.html ? parsed.html.replace(/<[^>]*>/g, ' ') : '') || '';
+              rawBody = stripQuotedReply(plain).substring(0, 1500);
+            } catch (parseErr) {
+              console.warn('Failed to parse reply MIME source, falling back to subject:', parseErr);
             }
           }
 
           if (!rawBody || rawBody.trim() === '') {
-            rawBody = 'Client replied to outreach inquiry.';
+            rawBody = message.envelope?.subject || 'Client replied to outreach inquiry.';
           }
 
           const recipientDisplayName = matchedSent.recipientName || 'Corporate Prospect';
