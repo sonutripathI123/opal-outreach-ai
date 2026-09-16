@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ScoreGauge } from '@/components/ui/ScoreGauge';
 import { Badge } from '@/components/ui/Badge';
+import { Modal } from '@/components/ui/Modal';
 import { ReviewDossierModal } from '@/components/review/ReviewDossierModal';
 import {
   Building2,
@@ -22,6 +23,7 @@ import {
   ShieldCheck,
   FileText,
   Activity,
+  UserPlus,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -35,6 +37,12 @@ export default function CompanyDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedDraft, setSelectedDraft] = useState<any>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isAddContactOpen, setIsAddContactOpen] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactRole, setContactRole] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
+  const [addContactError, setAddContactError] = useState<string | null>(null);
 
   const fetchCompany = async () => {
     try {
@@ -54,6 +62,41 @@ export default function CompanyDetailPage() {
   useEffect(() => {
     if (id) fetchCompany();
   }, [id]);
+
+  const handleAddContact = async () => {
+    if (!contactName.trim() || !contactRole.trim() || !contactEmail.trim()) {
+      setAddContactError('Name, post/role, and email are all required.');
+      return;
+    }
+    setSavingContact(true);
+    setAddContactError(null);
+    try {
+      const res = await fetch(`/api/companies/${id}/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactName, contactRole, contactEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddContactError(data.error || 'Failed to add contact');
+        return;
+      }
+      setIsAddContactOpen(false);
+      setContactName('');
+      setContactRole('');
+      setContactEmail('');
+      await fetchCompany();
+      // Straight into review, exactly as if Hunter/Apollo/Vibe Prospecting
+      // had found this contact automatically — the draft is already
+      // generated from the fixed partnership-outreach template.
+      setSelectedDraft({ ...data.draft, company });
+      setIsReviewOpen(true);
+    } catch (e: any) {
+      setAddContactError(e.message || 'Failed to add contact');
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -269,9 +312,26 @@ export default function CompanyDetailPage() {
 
         {/* Contacts & Decision-Makers */}
         <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
-          <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
-            Decision-Makers & Corporate Contacts
-          </h3>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+              Decision-Makers & Corporate Contacts
+            </h3>
+            <button
+              onClick={() => setIsAddContactOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-400 border border-amber-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Add Contact Manually</span>
+            </button>
+          </div>
+
+          {(!company.contacts || company.contacts.length === 0) && (
+            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs text-slate-400">
+              No contact found automatically via Hunter, Apollo, or Vibe Prospecting yet. If you found one manually
+              (e.g. via the Apollo link on Target Radar), add their name, post, and email above — a partnership
+              outreach draft will be generated for review immediately.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {company.contacts?.map((contact: any) => (
@@ -331,6 +391,65 @@ export default function CompanyDetailPage() {
         draft={selectedDraft}
         onRefresh={fetchCompany}
       />
+
+      <Modal
+        isOpen={isAddContactOpen}
+        onClose={() => {
+          setIsAddContactOpen(false);
+          setAddContactError(null);
+        }}
+        title="Add Contact Manually"
+        subtitle={`For ${company.name} — used when Hunter, Apollo & Vibe Prospecting couldn't find a verified contact`}
+        maxWidth="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Full Name</label>
+            <input
+              type="text"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="e.g. Susie Shelley"
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Post / Role</label>
+            <input
+              type="text"
+              value={contactRole}
+              onChange={(e) => setContactRole(e.target.value)}
+              placeholder="e.g. Head of Operations"
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Email Address</label>
+            <input
+              type="email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="e.g. susie.shelley@hubaustralia.com"
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-slate-100 focus:outline-none focus:border-amber-500/50"
+            />
+          </div>
+
+          {addContactError && (
+            <div className="text-xs text-rose-400 bg-rose-950/30 border border-rose-500/30 rounded-xl p-3">
+              {addContactError}
+            </div>
+          )}
+
+          <button
+            onClick={handleAddContact}
+            disabled={savingContact}
+            className="w-full px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-sm font-bold shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{savingContact ? 'Generating Draft...' : 'Add Contact & Generate Draft'}</span>
+          </button>
+        </div>
+      </Modal>
     </AppLayout>
   );
 }
