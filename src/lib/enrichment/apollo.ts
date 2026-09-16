@@ -220,6 +220,35 @@ export class ApolloPoolManager {
             }
           }
 
+          // Every attempt so far filtered by our fixed title list
+          // (person_titles) — a real decision-maker at this domain can
+          // still be missed if their actual title in Apollo's system
+          // doesn't line up with that list closely enough for Apollo's own
+          // title-matching (confirmed live: a domain with a title-matching
+          // "Head of Operations" contact, visible and unlocked in Apollo's
+          // own web UI, still came back with zero people from the titled
+          // API search). One last try without the title filter at all —
+          // any named contact at the right company is far better than
+          // "no contact found," and a human still reviews before sending.
+          if (people.length === 0) {
+            const domainOnlyRes = await fetch('https://api.apollo.io/v1/mixed_people/search', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Api-Key': keyEntry.apiKey.trim(),
+              },
+              body: JSON.stringify({
+                q_organization_domains: cleanDomain,
+                page: 1,
+                per_page: 5,
+              }),
+            });
+            if (domainOnlyRes.ok) {
+              const domainOnlyData = await domainOnlyRes.json().catch(() => ({}));
+              people = domainOnlyData.people || [];
+            }
+          }
+
           const isUsableEmail = (email: any) => typeof email === 'string' && email.length > 0 && !email.includes('not_unlocked') && !email.includes('email_unavailable');
 
           // Some Apollo plans return an already-unlocked email straight in
