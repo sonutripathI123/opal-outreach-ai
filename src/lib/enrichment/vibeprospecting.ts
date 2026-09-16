@@ -89,9 +89,16 @@ export class VibeProspectingClient {
         }),
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`Vibe Prospecting: business match HTTP ${res.status} for "${companyName}" (${domain}): ${errBody.slice(0, 300)}`);
+        return null;
+      }
       const data = await res.json();
       const matched = data?.matched_businesses?.[0];
+      if (!matched?.business_id) {
+        console.warn(`Vibe Prospecting: no business matched for "${companyName}" (${domain}). Response: ${JSON.stringify(data).slice(0, 300)}`);
+      }
       return matched?.business_id || null;
     } catch (err) {
       console.warn('Vibe Prospecting business match error:', err);
@@ -120,9 +127,17 @@ export class VibeProspectingClient {
         }),
       });
 
-      if (!res.ok) return [];
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`Vibe Prospecting: fetch prospects HTTP ${res.status} for business ${businessId}: ${errBody.slice(0, 300)}`);
+        return [];
+      }
       const data = await res.json();
-      return data?.data || [];
+      const prospects = data?.data || [];
+      if (prospects.length === 0) {
+        console.warn(`Vibe Prospecting: business ${businessId} matched, but 0 prospects returned for the configured job levels/departments. Response: ${JSON.stringify(data).slice(0, 300)}`);
+      }
+      return prospects;
     } catch (err) {
       console.warn('Vibe Prospecting fetch prospects error:', err);
       return [];
@@ -140,12 +155,18 @@ export class VibeProspectingClient {
         body: JSON.stringify({ prospect_id: prospectId }),
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.warn(`Vibe Prospecting: enrich HTTP ${res.status} for prospect ${prospectId}: ${errBody.slice(0, 300)}`);
+        return null;
+      }
       const data = await res.json();
       // Explorium's docs for this endpoint don't publish a full response
       // schema — "professional_email" matches the column name Explorium's
       // own CSV export uses for the same underlying enrichment, with a few
-      // fallback field names in case the live shape differs.
+      // fallback field names in case the live shape differs. If none of
+      // these match, the full response is logged so the real field name
+      // can be read straight from server logs instead of guessed at again.
       const record = data?.data ?? data;
       const email =
         record?.professional_email ||
@@ -155,7 +176,10 @@ export class VibeProspectingClient {
         null;
       const phone = record?.mobile_phone || record?.phone || record?.phone_numbers?.[0] || null;
 
-      if (!email && !phone) return null;
+      if (!email && !phone) {
+        console.warn(`Vibe Prospecting: enrich succeeded for prospect ${prospectId} but no known email/phone field matched. Full response: ${JSON.stringify(data).slice(0, 500)}`);
+        return null;
+      }
       return { email: email || undefined, phone: phone || undefined };
     } catch (err) {
       console.warn('Vibe Prospecting contact enrich error:', err);
