@@ -14,7 +14,17 @@ let cachedPartnershipTemplate: string | null = null;
 function loadPartnershipTemplate(): string {
   if (cachedPartnershipTemplate) return cachedPartnershipTemplate;
   const templatePath = path.join(process.cwd(), 'src/lib/email/templates/partnership-outreach.html');
-  cachedPartnershipTemplate = fs.readFileSync(templatePath, 'utf-8');
+  const raw = fs.readFileSync(templatePath, 'utf-8');
+  // The template as exported from its design tool is ~236KB, over 80% of
+  // which is pure indentation whitespace from deep div/table nesting (no
+  // <style> block references any of it — it's purely cosmetic in the
+  // source file). Gmail silently truncates any message over ~102KB
+  // ("[Message clipped]"), which was cutting off everything after the
+  // WhatsApp line in every sent email. Collapsing insignificant
+  // whitespace between tags brings it under ~75KB without changing how
+  // it renders — verified no tag pair here relies on that whitespace as
+  // a meaningful inline space between visible text.
+  cachedPartnershipTemplate = raw.replace(/>\s+</g, '><').trim();
   return cachedPartnershipTemplate;
 }
 
